@@ -1,4 +1,4 @@
-Attribute VB_Name = "Module1"
+Attribute VB_Name = "Sample"
 Option Explicit
 
 
@@ -9,13 +9,13 @@ Sub Sample()
     
 '    reqs = dbc.Requests.WhereEvaluate("x => x.Name = 'abc'").Any()
     
-    Dim v As visiter, r As Request
+    Dim v As Tag, r As Request
     For Each r In dbc.Requests.items
-        For Each v In r.visiters.items
+        For Each v In r.Tags.items
             If v.KeyItems.items.Count > 0 Then
-                Debug.Print r.RequesterName & ", " & vbTab & v.VisiterId & ":" & v.Name & " --- " & v.KeyItems.item(1).Name
+                Debug.Print r.RequesterName & ", " & vbTab & v.TagId & ":" & v.Name & " --- " & v.KeyItems.item(1).Name
             Else
-                Debug.Print r.RequesterName & ", " & vbTab & v.VisiterId & ":" & v.Name
+                Debug.Print r.RequesterName & ", " & vbTab & v.TagId & ":" & v.Name
             End If
         Next
     Next

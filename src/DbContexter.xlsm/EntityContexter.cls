@@ -17,8 +17,9 @@ Option Explicit
 
 Private Const VBA_CLASS_MODULE_ID As Long = 2
 
-Private cn_ As New ADODB.Connection
-
+Private cn_ As ADODB.Connection
+Private catalog_ As ADOX.catalog
+    
 Private Enum PropertyNameTypeIndex
     ecProperty
     ecField
@@ -26,6 +27,10 @@ Private Enum PropertyNameTypeIndex
     ecPropertyIsLet
 End Enum
 
+Private Sub Class_Initialize()
+    Set cn_ = New ADODB.Connection
+    Set catalog_ = New ADOX.catalog
+End Sub
 
 Public Function Init() As EntityContexter
     With cn_
@@ -33,6 +38,8 @@ Public Function Init() As EntityContexter
         .Properties("Extended Properties") = "Excel 12.0"
         .Open ThisWorkbook.Path & "\" & "TEST.xlsx"
     End With
+    catalog_.ActiveConnection = cn_.connectionString
+    
     Set Init = Me
 End Function
 
@@ -71,14 +78,14 @@ Public Function FetchRecords(tableName, T As Object) As Collection
 End Function
 
 Public Function ScaffoldDataBese()
-    Dim tableName As String, tableNames As New Collection
+    Dim tableName, tableNames As New Collection
     
     ' get table names
-    'tableNames = GetTableNameFromDb()
+    Set tableNames = GetTableNameFromDb()
     
     ' create class module from table names
     For Each tableName In tableNames
-        CreateEntityClassFromTableName tableName
+        CreateEntityClassFromTableName CStr(tableName)
     Next
 
     ' create DbContext.cls
@@ -255,8 +262,19 @@ re:
     GetEstimatedSingularName = s
 End Function
 
+Private Function GetTableNameFromDb() As Collection
+    Dim tableNames As New Collection, tbl
+    
+    For Each tbl In catalog_.Tables
+        tableNames.Add Replace(tbl.Name, "$", "")
+    Next
+
+    Set GetTableNameFromDb = tableNames
+End Function
+
 
 ' Terminate ------------------------------------------------------------------------
 Private Sub Class_Terminate()
+    If catalog_ Is Nothing Then Else Set catalog_ = Nothing
     If cn_ Is Nothing Then Else If cn_.State > 0 Then cn_.Close
 End Sub

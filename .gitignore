@@ -17,8 +17,7 @@ vbac.wsf
 # remove files for release
 UnitTest.cls
 UnitTests.bas
-src/*.cls
-src/*.bas
+src/
 !src/EntityContexter.cls
 !src/Sample.bas
 

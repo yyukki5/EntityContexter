@@ -9,6 +9,7 @@
 bin/*.xls?
 bin/old/
 bin/backup/
+bin/resorce/db/
 vbac.wsf
 *.doccls
 *.bat

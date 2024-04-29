@@ -18,7 +18,7 @@ Option Explicit
 Private Const VBA_CLASS_MODULE_ID As Long = 2
 
 Private cn_ As ADODB.Connection
-Private catalog_ As ADOX.catalog
+Private catalog_ As ADOX.catalog  
     
 Private Enum PropertyNameTypeIndex
     [_Init]
@@ -96,7 +96,7 @@ Public Function FetchRecords(tableName, T As Object) As Collection
 End Function
 
 Public Function ScaffoldDataBese()
-    Dim tableName, tableNames As New Collection, tableEntityInfos As New Collection, tableEntityInfo As Collection
+    Dim tableName, tableNames As New Collection, tableEntityInfos As New Collection, entityInfo As Collection
     
     ' get table names
     Set tableNames = GetTableNameFromDb()
@@ -104,9 +104,22 @@ Public Function ScaffoldDataBese()
     ' create class module from table names
     For Each tableName In tableNames
         Debug.Print "- " & tableName & " -------"
-        Set tableEntityInfo = GetEntityInfoByTable(CStr(tableName))
-        CreateEntityClassFromTableName tableEntityInfo
-        tableEntityInfos.Add tableEntityInfo
+        Set entityInfo = New Collection
+        ' get names of table, and columns
+        SetEntityInfoFromTable CStr(tableName), entityInfo
+        ' todo. get entityInfo 1 to N relation
+        SetEntityInfoColumnsRelatedTo CStr(tableName), entityInfo
+        
+        tableEntityInfos.Add entityInfo, tableName
+    Next
+    
+    ' todo. get entityInfo N to 1 relation
+    For Each tableName In tableNames
+        
+    Next
+                
+    For Each tableName In tableNames
+        CreateEntityClassFromTableName tableEntityInfos(tableName)
         Debug.Print "----------------"
     Next
     
@@ -127,23 +140,12 @@ Private Function FetchRecordSet(tableName As String) As Recordset
     Set FetchRecordSet = cn_.Execute(query)
 End Function
 
-Private Function GetEntityInfoByTable(tableName As String) As Collection
-    Dim entityInfo As New Collection, propertyNameType As New Collection, relatedPropertyNameType As New Collection
-    Dim tbl As ADOX.Table, col As ADOX.Column, ky As ADOX.Key, dummy As Object
+Private Function SetEntityInfoFromTable(tableName As String, ByRef entityInfo As Collection) As Collection
+    Dim propertyNameType As New Collection, tbl As ADOX.Table, col As ADOX.Column, ky As ADOX.Key, dummy As Object, i As Long
     
-    Set tbl = catalog_.Tables(tableName)
-    For Each col In tbl.Columns
+    For Each col In catalog_.Tables(tableName).Columns
         propertyNameType.Add GetPropertyNameType(col.Name, col.Type)
     Next
-    For Each ky In tbl.Keys
-        If ky.Type <> adKeyForeign Then GoTo nextloop
-        For Each col In ky.Columns
-            propertyNameType.Add GetPropertyNameTypeByRelatedTable(ky.RelatedTable, col.Name, col.RelatedColumn)
-        Next
-nextloop:
-    Next
-    
-    Dim i As Long
     For i = EntityTableNameIndex.[_Init] To EntityTableNameIndex.[_Last]
         Select Case i
             Case ecTableName: entityInfo.Add tableName
@@ -152,7 +154,21 @@ nextloop:
             Case ecPropertyNameType: entityInfo.Add propertyNameType
         End Select
     Next i
-    Set GetEntityInfoByTable = entityInfo
+End Function
+
+Private Function SetEntityInfoColumnsRelatedTo(tableName As String, ByRef entityInfo As Collection)
+    Dim propertyNameTypes As New Collection, propertyNameType, col As ADOX.Column, ky As ADOX.Key, dummy As Object
+    
+    For Each ky In catalog_.Tables(tableName).Keys
+        If ky.Type <> adKeyForeign Then GoTo nextLoop
+        For Each col In ky.Columns
+            propertyNameTypes.Add GetPropertyNameTypeByRelatedTable(ky.RelatedTable, col.Name, col.RelatedColumn)
+        Next
+nextLoop:
+    Next
+    For Each propertyNameType In propertyNameTypes
+        entityInfo.item(ecPropertyNameType).Add propertyNameType
+    Next
 End Function
 
 Private Function CreateEntityClassFromTableName(tableEntityInfo As Collection)
@@ -309,8 +325,9 @@ End Function
 Private Function GetPropertyNameTypeByRelatedTable(keyTable, keyfield, relatedfieldName)
     Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
                 
-    propertyName = ConvertEntitiesClassName(CStr(keyTable))
-    propertyFieldName = ConvertToEntitiesClassNameField(CStr(keyTable))
+    'propertyName = ConvertEntitiesClassName(CStr(keyTable))
+    propertyName = ConvertEntityClassName(CStr(keyTable))
+    propertyFieldName = ConvertFieldNameToClassFieldName(CStr(keyTable))
     propertyTypeName = propertyName
     
     GetPropertyNameTypeByRelatedTable = GetPropertyNameTypeArray(propertyFieldName, propertyName, propertyTypeName, False, keyfield, relatedfieldName)

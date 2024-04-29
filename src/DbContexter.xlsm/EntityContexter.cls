@@ -62,30 +62,50 @@ Public Function Init() As EntityContexter
     Set Init = Me
 End Function
 
-Function SetRelation(pk As Object, pKeyName As String, fk As Object, fKeyName As String)
-    Dim pko As Object, fko As Object
+Function SetRelationShip1toN(primaryKey As Object, primaryKeyPropertyName As String, foreignKey As Object, foreignKeyPropertyName As String)
+    Dim primaryKeyObject As Object, foreignKeyObject As Object
 
-    For Each pko In pk.items
-        For Each fko In fk.items
-            If CallByName(fko, fKeyName, VbGet) = CallByName(pko, pKeyName, VbGet) Then
-                CallByName(pko, TypeName(fk), VbGet).Add fko
+    For Each primaryKeyObject In primaryKey.items
+        For Each foreignKeyObject In foreignKey.items
+            If CallByName(foreignKeyObject, foreignKeyPropertyName, VbGet) = CallByName(primaryKeyObject, primaryKeyPropertyName, VbGet) Then
+                CallByName(primaryKeyObject, TypeName(foreignKey), VbGet).Add foreignKeyObject
+                Call CallByName(foreignKeyObject, TypeName(primaryKeyObject), VbSet, primaryKeyObject)
             End If
         Next
     Next
 End Function
 
+Function SetRelationShipNto1(primaryKey As Object, primaryKeyPropertyName As String, foreignKey As Object, foreignKeyPropertyName As String)
+    Dim primaryKeyObject As Object, foreignKeyObject As Object
+
+    For Each primaryKeyObject In primaryKey.items
+        For Each foreignKeyObject In foreignKey.items
+            If CallByName(foreignKeyObject, foreignKeyPropertyName, VbGet) = CallByName(primaryKeyObject, primaryKeyPropertyName, VbGet) Then
+                Call CallByName(primaryKeyObject, TypeName(foreignKey.item(1)), VbSet, foreignKeyObject)
+                Call CallByName(foreignKeyObject, TypeName(primaryKey), VbSet, primaryKey)
+            End If
+        Next
+    Next
+End Function
+
+
+
 Public Function FetchRecords(tableName, T As Object) As Collection
     Dim rs As Recordset
     Dim items As New Collection
-    Dim field As ADODB.field, fieldName As String
+    Dim field As ADODB.field, propertyName As String
     
     Set rs = FetchRecordSet(CStr(tableName))
     rs.MoveFirst
     Do Until rs.EOF
         Set T = T.GetNew ' <- HACK more better. (to avoid GetNew() in each racord classes)
         For Each field In rs.Fields
-            fieldName = Replace(StrConv(Replace(field.Name, "_", " "), vbProperCase), " ", "")
-            Call CallByName(T, fieldName, VbLet, field.Value)
+            propertyName = ConvertDbFieldNameToClassPropertyName(field.Name)
+            If IsNull(field.Value) Then
+                Call CallByName(T, propertyName, VbLet, 0)
+            Else
+                Call CallByName(T, propertyName, VbLet, field.Value)
+            End If
         Next
         items.Add T
         rs.MoveNext
@@ -134,7 +154,8 @@ End Function
 Private Function FetchRecordSet(tableName As String) As Recordset
     Dim query As String
     
-    query = "SELECT * FROM [" & tableName & "$]"
+'    query = "SELECT * FROM [" & tableName & "$]"
+    query = "SELECT * FROM [" & tableName & "]"
     Set FetchRecordSet = cn_.Execute(query)
 End Function
 
@@ -262,18 +283,25 @@ Private Function GetEntityCode(entityName As String, propertyInfo As Collection)
         .Add "Option Explicit"
         .Add ""
         For Each pInfo In propertyInfo
-            .Add "Private " & pInfo(ecFieldName) & " as " & pInfo(ecPropertyType)
+            If pInfo(ecPropertyIsLet) Then
+                .Add "Private " & pInfo(ecFieldName) & " as " & pInfo(ecPropertyType)
+            Else
+                .Add "Private " & pInfo(ecFieldName) & " as New " & pInfo(ecPropertyType)
+            End If
         Next
         .Add ""
         For Each pInfo In propertyInfo
-            .Add "Public Property Get " & pInfo(ecPropertyName) & "() as " & pInfo(ecPropertyType)
-            .Add "    " & pInfo(ecPropertyName) & " = " & pInfo(ecFieldName)
-            .Add "End Property"
             If pInfo(ecPropertyIsLet) Then
+                .Add "Public Property Get " & pInfo(ecPropertyName) & "() as " & pInfo(ecPropertyType)
+                .Add "    Let " & pInfo(ecPropertyName) & " = " & pInfo(ecFieldName)
+                .Add "End Property"
                 .Add "Public Property Let " & pInfo(ecPropertyName) & "(val as " & pInfo(ecPropertyType) & ")"
                 .Add "    Let " & pInfo(ecFieldName) & " = val"
                 .Add "End Property"
             Else
+                .Add "Public Property Get " & pInfo(ecPropertyName) & "() as " & pInfo(ecPropertyType)
+                .Add "    Set " & pInfo(ecPropertyName) & " = " & pInfo(ecFieldName)
+                .Add "End Property"
                 .Add "Public Property Set " & pInfo(ecPropertyName) & "(val as " & pInfo(ecPropertyType) & ")"
                 .Add "    Set " & pInfo(ecFieldName) & " = val"
                 .Add "End Property"

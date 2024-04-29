@@ -20,22 +20,22 @@ Private Const VBA_CLASS_MODULE_ID As Long = 2
 Private cn_ As ADODB.Connection
 Private catalog_ As ADOX.catalog
     
-Private Enum PropertyNameTypeIndex
+Private Enum PropertyInfoIndex
     [_Init]
-    ecProperty
-    ecField
+    ecPropertyName
+    ecFieldName
     ecPropertyType
     ecPropertyIsLet
-    ecKeyDbFieldName
-    ecRelatedFieldName
+    ecDbKeyFieldName
+    ecDbRelatedFieldName
     [_Last]
 End Enum
-Private Enum EntityTableNameIndex
+Private Enum EntityInfoIndex
     [_Init]
-    ecTableName
-    ecEntityName
-    ecEntitesName
-    ecPropertyNameType
+    ecDbTableName
+    ecEntityClassName
+    ecEntitesClassName
+    ecPropertyInfo
     [_Last]
 End Enum
 
@@ -95,8 +95,8 @@ Public Function FetchRecords(tableName, T As Object) As Collection
     Set FetchRecords = items
 End Function
 
-Public Function ScaffoldDataBese()
-    Dim tableName, tableNames As New Collection, tableEntityInfos As New Collection, entityInfo As Collection
+Public Function ScaffoldDataBese() As Collection
+    Dim tableName, tableNames As New Collection, entityInfos As New Collection, entityInfo As Collection
     
     ' get table names
     Set tableNames = GetTableNameFromDb()
@@ -105,20 +105,24 @@ Public Function ScaffoldDataBese()
     For Each tableName In tableNames
         Set entityInfo = New Collection
         SetEntityInfoFromTable CStr(tableName), entityInfo
-        tableEntityInfos.Add entityInfo, tableName
+        entityInfos.Add entityInfo, tableName
     Next
     ' Add relationship to class module code
-    SetEntityInfoRelatedColumns tableEntityInfos
+    SetEntityInfoRelatedColumns entityInfos
                 
     ' create class module from table names
     For Each tableName In tableNames
         Debug.Print "- " & tableName & " -------"
-        CreateEntityClassFromTableName tableEntityInfos(tableName)
+        CreateEntityClassFromTableName entityInfos(tableName)
         Debug.Print "----------------"
     Next
     
     ' create DbContext.cls
     'CreateDbontect()
+    
+    Debug.Print "Done"
+    ' for test
+    Set ScaffoldDataBese = entityInfos
 End Function
 
 Public Function GetKeyFieldNameByPropertyName(tbl As Object, propertyName As String) As String
@@ -134,18 +138,27 @@ Private Function FetchRecordSet(tableName As String) As Recordset
     Set FetchRecordSet = cn_.Execute(query)
 End Function
 
+Private Function GetTableNameFromDb() As Collection
+    Dim tableNames As New Collection, tbl As ADOX.Table
+    
+    For Each tbl In catalog_.Tables
+        If tbl.Type = "TABLE" Then tableNames.Add Replace(tbl.Name, "$", "")
+    Next
+
+    Set GetTableNameFromDb = tableNames
+End Function
 Private Function SetEntityInfoFromTable(tableName As String, ByRef entityInfo As Collection)
     Dim propertyNameType As New Collection, tbl As ADOX.Table, col As ADOX.Column, ky As ADOX.Key, dummy As Object, i As Long
     
     For Each col In catalog_.Tables(tableName).Columns
-        propertyNameType.Add GetPropertyNameType(col.Name, col.Type)
+        propertyNameType.Add GetPropertyInfoAsTable(col.Name, col.Type)
     Next
-    For i = EntityTableNameIndex.[_Init] To EntityTableNameIndex.[_Last]
+    For i = EntityInfoIndex.[_Init] To EntityInfoIndex.[_Last]
         Select Case i
-            Case ecTableName: entityInfo.Add tableName
-            Case ecEntitesName: entityInfo.Add ConvertEntitiesClassName(tableName)
-            Case ecEntityName: entityInfo.Add ConvertEntityClassName(tableName)
-            Case ecPropertyNameType: entityInfo.Add propertyNameType
+            Case ecDbTableName: entityInfo.Add tableName
+            Case ecEntitesClassName: entityInfo.Add ConvertDbTableNameToEntitesClassName(tableName)
+            Case ecEntityClassName: entityInfo.Add ConvertDbTableNameToEntityClassName(tableName)
+            Case ecPropertyInfo: entityInfo.Add propertyNameType
         End Select
     Next i
 End Function
@@ -153,14 +166,14 @@ Private Function SetEntityInfoRelatedColumns(ByRef entityInfos As Collection)
     Dim entityInfo As Collection, propertyNameTypes As New Collection, col As ADOX.Column, ky As ADOX.Key, tableName As String
     
     For Each entityInfo In entityInfos
-        tableName = entityInfo.item(ecTableName)
+        tableName = entityInfo.item(ecDbTableName)
         For Each ky In catalog_.Tables(tableName).Keys
             If ky.Type <> adKeyForeign Then GoTo nextLoop
             For Each col In ky.Columns
-                entityInfo.item(ecPropertyNameType).Add _
-                    GetPropertyNameTypeByRelatedTableNto1(ky.RelatedTable, col.Name, col.RelatedColumn)
-                entityInfos(ky.RelatedTable).item(ecPropertyNameType).Add _
-                    GetPropertyNameTypeByRelatedTable1toN(tableName, col.RelatedColumn, col.Name)
+                entityInfo.item(ecPropertyInfo).Add _
+                    GetPropertyInfoAsRelatedTableNto1(ky.RelatedTable, col.Name, col.RelatedColumn)
+                entityInfos(ky.RelatedTable).item(ecPropertyInfo).Add _
+                    GetPropertyInfoAsRelatedTable1toN(tableName, col.RelatedColumn, col.Name)
             Next
 nextLoop:
         Next
@@ -170,20 +183,20 @@ End Function
 Private Function CreateEntityClassFromTableName(tableEntityInfo As Collection)
     Dim EntityClass As Object, EntitiesClass As Object, codeEntityClass As String, codeEntitiesClass As String
     
-    codeEntityClass = GetEntityCode(tableEntityInfo(ecEntityName), tableEntityInfo(ecPropertyNameType))
-    codeEntitiesClass = GetEntitesCode(tableEntityInfo(ecTableName), tableEntityInfo(ecEntityName))
+    codeEntityClass = GetEntityCode(tableEntityInfo(ecEntityClassName), tableEntityInfo(ecPropertyInfo))
+    codeEntitiesClass = GetEntitesCode(tableEntityInfo(ecDbTableName), tableEntityInfo(ecEntityClassName))
 
     ' only force update (all delete and re-insert)
     ' EntityClass
-    Set EntityClass = AddClassModule(tableEntityInfo(ecEntityName))
+    Set EntityClass = AddClassModule(tableEntityInfo(ecEntityClassName))
     EntityClass.CodeModule.DeleteLines 1, EntityClass.CodeModule.CountOfLines
     EntityClass.CodeModule.InsertLines 1, codeEntityClass
-    Debug.Print tableEntityInfo(ecEntityName); ": done"
+    Debug.Print tableEntityInfo(ecEntityClassName); ": done"
     
-    Set EntitiesClass = AddClassModule(tableEntityInfo(ecEntitesName))
+    Set EntitiesClass = AddClassModule(tableEntityInfo(ecEntitesClassName))
     EntitiesClass.CodeModule.DeleteLines 1, EntitiesClass.CodeModule.CountOfLines
     EntitiesClass.CodeModule.InsertLines 1, codeEntitiesClass
-    Debug.Print tableEntityInfo(ecEntitesName); ": done"
+    Debug.Print tableEntityInfo(ecEntitesClassName); ": done"
 
 End Function
 Private Function AddClassModule(className As String) As Object
@@ -242,27 +255,27 @@ Private Function GetEntitesCode(tableName As String, entityName As String) As St
     
     GetEntitesCode = str
 End Function
-Private Function GetEntityCode(entityName As String, propertyNameType As Collection) As String
-    Dim texts As New Collection, pNameType, str As String, txt
+Private Function GetEntityCode(entityName As String, propertyInfo As Collection) As String
+    Dim texts As New Collection, pInfo, str As String, txt
     
     With texts
         .Add "Option Explicit"
         .Add ""
-        For Each pNameType In propertyNameType
-            .Add "Private " & pNameType(ecField) & " as " & pNameType(ecPropertyType)
+        For Each pInfo In propertyInfo
+            .Add "Private " & pInfo(ecFieldName) & " as " & pInfo(ecPropertyType)
         Next
         .Add ""
-        For Each pNameType In propertyNameType
-            .Add "Public Property Get " & pNameType(ecProperty) & "() as " & pNameType(ecPropertyType)
-            .Add "    " & pNameType(ecProperty) & " = " & pNameType(ecField)
+        For Each pInfo In propertyInfo
+            .Add "Public Property Get " & pInfo(ecPropertyName) & "() as " & pInfo(ecPropertyType)
+            .Add "    " & pInfo(ecPropertyName) & " = " & pInfo(ecFieldName)
             .Add "End Property"
-            If pNameType(ecPropertyIsLet) Then
-                .Add "Public Property Let " & pNameType(ecProperty) & "(val as " & pNameType(ecPropertyType) & ")"
-                .Add "    Let " & pNameType(ecField) & " = val"
+            If pInfo(ecPropertyIsLet) Then
+                .Add "Public Property Let " & pInfo(ecPropertyName) & "(val as " & pInfo(ecPropertyType) & ")"
+                .Add "    Let " & pInfo(ecFieldName) & " = val"
                 .Add "End Property"
             Else
-                .Add "Public Property Set " & pNameType(ecProperty) & "(val as " & pNameType(ecPropertyType) & ")"
-                .Add "    Set " & pNameType(ecField) & " = val"
+                .Add "Public Property Set " & pInfo(ecPropertyName) & "(val as " & pInfo(ecPropertyType) & ")"
+                .Add "    Set " & pInfo(ecFieldName) & " = val"
                 .Add "End Property"
             End If
         Next
@@ -273,8 +286,8 @@ Private Function GetEntityCode(entityName As String, propertyNameType As Collect
         .Add "Public Function GetKeyFieldName(propertyName As String) As String"
         .Add "    Dim s As String"
         .Add "    Select Case propertyName"
-        For Each pNameType In propertyNameType
-            .Add "        Case """ & pNameType(ecProperty) & """: s = """ & pNameType(ecKeyDbFieldName) & """"
+        For Each pInfo In propertyInfo
+            .Add "        Case """ & pInfo(ecPropertyName) & """: s = """ & pInfo(ecDbKeyFieldName) & """"
         Next
         .Add "    End Select"
         .Add "    GetKeyFieldName = s"
@@ -284,11 +297,11 @@ Private Function GetEntityCode(entityName As String, propertyNameType As Collect
     
     GetEntityCode = str
 End Function
-Private Function GetPropertyNameType(fieldName As String, Optional fieldType As ADODB.DataTypeEnum, Optional actualValue As Variant)
+Private Function GetPropertyInfoAsTable(fieldName As String, Optional fieldType As ADODB.DataTypeEnum, Optional actualValue As Variant)
     Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
     
-    propertyName = ConvertFieldNameToPropertyName(fieldName)
-    propertyFieldName = ConvertFieldNameToClassFieldName(fieldName)
+    propertyName = ConvertDbFieldNameToClassPropertyName(fieldName)
+    propertyFieldName = ConvertDBFieldNameToClassFieldName(fieldName)
     If IsMissing(actualValue) = False Then propertyTypeName = TypeName(actualValue): GoTo gotoSetValue
     
     ' todo confirm
@@ -312,58 +325,57 @@ Private Function GetPropertyNameType(fieldName As String, Optional fieldType As 
     ElseIf fieldType = adVarWChar Then propertyTypeName = "String"
     ElseIf fieldType = adLongVarWChar Then propertyTypeName = "String"
     Else
-        Err.Raise 9100, "EntityContext.GetPropertyNameType()", "field type is not supported."
+        Err.Raise 9100, "EntityContext.GetPropertyInfoAsTable()", "field type is not supported."
     End If
 
 gotoSetValue:
-    GetPropertyNameType = GetPropertyNameTypeArray(propertyFieldName, propertyName, propertyTypeName, True, fieldName, "")
+    GetPropertyInfoAsTable = GetPropertyInfo(propertyFieldName, propertyName, propertyTypeName, True, fieldName, "")
 End Function
 
-Private Function GetPropertyNameTypeByRelatedTable1toN(keyTable, keyfield, relatedfieldName)
+Private Function GetPropertyInfoAsRelatedTable1toN(keyTable, keyfield, relatedfieldName)
     Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
                 
-    propertyName = ConvertEntitiesClassName(CStr(keyTable))
-    propertyFieldName = ConvertToEntitiesClassNameField(CStr(keyTable))
+    propertyName = ConvertDbTableNameToEntitesClassName(CStr(keyTable))
+    propertyFieldName = ConvertDbTableNameToEntitiesClassFieldName(CStr(keyTable))
     propertyTypeName = propertyName
     
-    GetPropertyNameTypeByRelatedTable1toN = GetPropertyNameTypeArray(propertyFieldName, propertyName, propertyTypeName, False, keyfield, relatedfieldName)
+    GetPropertyInfoAsRelatedTable1toN = GetPropertyInfo(propertyFieldName, propertyName, propertyTypeName, False, keyfield, relatedfieldName)
 End Function
-Private Function GetPropertyNameTypeByRelatedTableNto1(keyTable, keyfield, relatedfieldName)
+Private Function GetPropertyInfoAsRelatedTableNto1(keyTable, keyfield, relatedfieldName)
     Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
                 
-    propertyName = ConvertEntityClassName(CStr(keyTable))
-    propertyFieldName = ConvertFieldNameToClassFieldName(CStr(keyTable))
+    propertyName = ConvertDbTableNameToEntityClassName(CStr(keyTable))
+    propertyFieldName = ConvertDBFieldNameToClassFieldName(CStr(keyTable))
     propertyTypeName = propertyName
     
-    GetPropertyNameTypeByRelatedTableNto1 = GetPropertyNameTypeArray(propertyFieldName, propertyName, propertyTypeName, False, keyfield, relatedfieldName)
+    GetPropertyInfoAsRelatedTableNto1 = GetPropertyInfo(propertyFieldName, propertyName, propertyTypeName, False, keyfield, relatedfieldName)
 End Function
-Private Function GetPropertyNameTypeArray(propertyFieldName, propertyName, propertyTypeName, isLet, fieldName, relatedfieldName)
+Private Function GetPropertyInfo(propertyFieldName, propertyName, propertyTypeName, isLet, fieldName, relatedfieldName)
     Dim arr
-    ReDim arr(PropertyNameTypeIndex.[_Init] + 1 To PropertyNameTypeIndex.[_Last] - 1)
-    arr(PropertyNameTypeIndex.ecField) = propertyFieldName
-    arr(PropertyNameTypeIndex.ecProperty) = propertyName
-    arr(PropertyNameTypeIndex.ecPropertyType) = propertyTypeName
-    arr(PropertyNameTypeIndex.ecPropertyIsLet) = isLet
-    arr(PropertyNameTypeIndex.ecKeyDbFieldName) = fieldName
-    arr(PropertyNameTypeIndex.ecRelatedFieldName) = relatedfieldName
-    GetPropertyNameTypeArray = arr
+    ReDim arr(PropertyInfoIndex.[_Init] + 1 To PropertyInfoIndex.[_Last] - 1)
+    arr(PropertyInfoIndex.ecFieldName) = propertyFieldName
+    arr(PropertyInfoIndex.ecPropertyName) = propertyName
+    arr(PropertyInfoIndex.ecPropertyType) = propertyTypeName
+    arr(PropertyInfoIndex.ecPropertyIsLet) = isLet
+    arr(PropertyInfoIndex.ecDbKeyFieldName) = fieldName
+    arr(PropertyInfoIndex.ecDbRelatedFieldName) = relatedfieldName
+    GetPropertyInfo = arr
 End Function
 
-
-Private Function ConvertEntitiesClassName(dbTbleName As String) As String
-    ConvertEntitiesClassName = GetEstimatedPluralName(ConvertSnakeToPascalCase(dbTbleName))
+Private Function ConvertDbTableNameToEntitesClassName(dbTbleName As String) As String
+    ConvertDbTableNameToEntitesClassName = GetEstimatedPluralName(ConvertSnakeToPascalCase(dbTbleName))
 End Function
-Private Function ConvertEntityClassName(dbTbleName As String) As String
-    ConvertEntityClassName = GetEstimatedSingularName(ConvertSnakeToPascalCase(dbTbleName))
+Private Function ConvertDbTableNameToEntityClassName(dbTbleName As String) As String
+    ConvertDbTableNameToEntityClassName = GetEstimatedSingularName(ConvertSnakeToPascalCase(dbTbleName))
 End Function
-Private Function ConvertToEntitiesClassNameField(dbTbleName As String) As String
-    ConvertToEntitiesClassNameField = GetEstimatedPluralName(ConvertSnakeToCamelCase(dbTbleName)) & "_"
+Private Function ConvertDbTableNameToEntitiesClassFieldName(dbTbleName As String) As String
+    ConvertDbTableNameToEntitiesClassFieldName = GetEstimatedPluralName(ConvertSnakeToCamelCase(dbTbleName)) & "_"
 End Function
-Private Function ConvertFieldNameToPropertyName(dbFieldName As String) As String
-    ConvertFieldNameToPropertyName = ConvertSnakeToPascalCase(dbFieldName)
+Private Function ConvertDbFieldNameToClassPropertyName(dbFieldName As String) As String
+    ConvertDbFieldNameToClassPropertyName = ConvertSnakeToPascalCase(dbFieldName)
 End Function
-Private Function ConvertFieldNameToClassFieldName(dbFieldName As String) As String
-    ConvertFieldNameToClassFieldName = ConvertSnakeToCamelCase(dbFieldName) & "_"
+Private Function ConvertDBFieldNameToClassFieldName(dbFieldName As String) As String
+    ConvertDBFieldNameToClassFieldName = ConvertSnakeToCamelCase(dbFieldName) & "_"
 End Function
 Private Function ConvertSnakeToPascalCase(snakeCase As String) As String
     ConvertSnakeToPascalCase = Replace(StrConv(Replace(snakeCase, "_", " "), vbProperCase), " ", "")
@@ -371,8 +383,7 @@ End Function
 Private Function ConvertSnakeToCamelCase(snakeCase As String)
     Dim s As String
     s = Replace(StrConv(Replace(snakeCase, "_", " "), vbProperCase), " ", "")
-    s = StrConv(Left(s, 1), vbLowerCase) & Mid(s, 2)
-    ConvertSnakeToCamelCase = s
+    ConvertSnakeToCamelCase = StrConv(Left(s, 1), vbLowerCase) & Mid(s, 2)
 End Function
 Private Function GetEstimatedPluralName(singularName As String) As String
     Dim s As String
@@ -410,18 +421,6 @@ Private Function GetEstimatedSingularName(pluralName As String) As String
 re:
     GetEstimatedSingularName = s
 End Function
-Private Function GetTableNameFromDb() As Collection
-    Dim tableNames As New Collection, tbl As ADOX.Table
-    
-    For Each tbl In catalog_.Tables
-        If tbl.Type = "TABLE" Then
-            tableNames.Add Replace(tbl.Name, "$", "")
-        End If
-    Next
-
-    Set GetTableNameFromDb = tableNames
-End Function
-
 
 
 ' Terminate ------------------------------------------------------------------------
@@ -429,3 +428,5 @@ Private Sub Class_Terminate()
     If catalog_ Is Nothing Then Else Set catalog_ = Nothing
     If cn_ Is Nothing Then Else If cn_.State > 0 Then cn_.Close
 End Sub
+
+

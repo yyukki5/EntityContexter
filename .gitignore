@@ -22,7 +22,7 @@ UnitTests.bas
 src/
 !src/EntityContexter.cls
 !src/Sample.bas
-
+!src/DbContexter.xlsm/DbContextSample.cls
 
 # User-specific files
 *.rsuser

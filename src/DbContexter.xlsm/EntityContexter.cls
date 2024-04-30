@@ -10,9 +10,11 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' Entity Contexer -----------------------------------------------------------------
-' Project   : https://github.com/yyukki5/EntityContexter
-' Depend on : Microsoft ActiveX Data Objects X.X Library
-' Before Using : Need to check "Trust access to the VBA project object model"
+' Version       : 0.1.0
+' Project       : https://github.com/yyukki5/EntityContexter
+' Depend on     : Microsoft ActiveX Data Objects X.X Library, Microsoft ADO Ext. 2.8 for DDL and Security
+' Before Using  : Need to check "Trust access to the VBA project object model"
+' Function      : Scaffolding DB
 ' ---------------------------------------------------------------------------------
 
 Private Const VBA_CLASS_MODULE_ID As Long = 2
@@ -40,22 +42,15 @@ Private Enum EntityInfoIndex
     [_Last]
 End Enum
 
-
 Private Sub Class_Initialize()
     Set cn_ = New ADODB.Connection
     Set catalog_ = New ADOX.catalog
     isExportFiles_ = True
 End Sub
 
-Public Function Init() As EntityContexter
-'    With cn_
-'        .Provider = "Microsoft.ACE.OLEDB.12.0"
-'        .Properties("Extended Properties") = "Excel 12.0"
-'        .Open ThisWorkbook.Path & "\" & "TEST.xlsx"
-'    End With
-
+Public Function Init(connectionString As String) As EntityContexter
     With cn_
-        .connectionString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" & ThisWorkbook.path & "\resorce\db\Test.accdb"
+        .connectionString = connectionString
         .Open
     End With
 
@@ -90,8 +85,6 @@ Function SetRelationShipNto1(primaryKey As Object, primaryKeyPropertyName As Str
     Next
 End Function
 
-
-
 Public Function FetchRecords(tableName, T As Object) As Collection
     Dim rs As Recordset
     Dim items As New Collection
@@ -117,12 +110,11 @@ Public Function FetchRecords(tableName, T As Object) As Collection
     Set FetchRecords = items
 End Function
 
-Public Function ScaffoldDataBese(Optional usingAttribute As Boolean) As Collection
+Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True) As Collection
     Dim tableName, tableNames As New Collection, entityInfos As New Collection, entityInfo As Collection
     
     ' setting
     isExportFiles_ = usingAttribute
-    
     
     ' get table names
     Set tableNames = GetTableNameFromDb()
@@ -136,17 +128,17 @@ Public Function ScaffoldDataBese(Optional usingAttribute As Boolean) As Collecti
     ' Add relationship to class module code
     SetEntityInfoRelatedColumns entityInfos
                 
+    Debug.Print "- " & tableName & " -------"
     ' create class module from table names
     For Each tableName In tableNames
-        Debug.Print "- " & tableName & " -------"
         CreateEntityClassFromTableName entityInfos(tableName)
-        Debug.Print "----------------"
+        Debug.Print tableName & ": done"
+
     Next
+    ' to be implement:  create DbContext.cls
+'    CreateDbContect entityInfos
+    Debug.Print "- Done -------"
     
-    ' create DbContext.cls
-    'CreateDbontect()
-    
-    Debug.Print "Done"
     ' for test
     Set ScaffoldDataBese = entityInfos
 End Function
@@ -159,12 +151,9 @@ End Function
 ' Private Methods ----------------------------------------------------------------
 Private Function FetchRecordSet(tableName As String) As Recordset
     Dim query As String
-    
-'    query = "SELECT * FROM [" & tableName & "$]"
     query = "SELECT * FROM [" & tableName & "]"
     Set FetchRecordSet = cn_.Execute(query)
 End Function
-
 
 Private Function GetTableNameFromDb() As Collection
     Dim tableNames As New Collection, tbl As ADOX.Table
@@ -207,7 +196,6 @@ nextLoop:
         Next
     Next
 End Function
-
 Private Function CreateEntityClassFromTableName(tableEntityInfo As Collection)
     Dim EntityClass As Object, EntitiesClass As Object, codeEntityClass As String, codeEntitiesClass As String
         
@@ -221,7 +209,6 @@ Private Function CreateEntityClassFromTableName(tableEntityInfo As Collection)
     Else
         ' option2 using CodeModule.Insertlines()
         ' only force update (all delete and re-insert)
-        ' EntityClass
         Set EntityClass = AddClassModule(tableEntityInfo(ecEntityClassName))
         EntityClass.CodeModule.DeleteLines 1, EntityClass.CodeModule.CountOfLines
         EntityClass.CodeModule.InsertLines 1, codeEntityClass
@@ -232,8 +219,13 @@ Private Function CreateEntityClassFromTableName(tableEntityInfo As Collection)
         EntitiesClass.CodeModule.InsertLines 1, codeEntitiesClass
     End If
     
-    Debug.Print tableEntityInfo(ecEntitesClassName); ": done"
 End Function
+
+' to be implement
+'Private Function CreateDbContect(entityInfos As Collection)
+'End Function
+'Private Function GetDbcCode(entityInfos As Collection)
+'End Function
 
 Private Function AddClassModuleFromFile(className, codes)
     Dim classFilePath As String
@@ -260,7 +252,6 @@ Private Function ImportClassModuleFile(classFilePath, className)
         .VBComponents.Import classFilePath
     End With
 End Function
-
 Private Function AddClassModule(className As String) As Object
     Dim clsModule As Object
 
@@ -405,7 +396,6 @@ Private Function GetPropertyInfoAsTable(fieldName As String, Optional fieldType 
     propertyFieldName = ConvertDBFieldNameToClassFieldName(fieldName)
     If IsMissing(actualValue) = False Then propertyTypeName = TypeName(actualValue): GoTo gotoSetValue
     
-    ' todo confirm
     If fieldType = adInteger Then
         propertyTypeName = "Integer"
     ElseIf fieldType = adSingle Then propertyTypeName = "Single"
@@ -432,7 +422,6 @@ Private Function GetPropertyInfoAsTable(fieldName As String, Optional fieldType 
 gotoSetValue:
     GetPropertyInfoAsTable = GetPropertyInfo(propertyFieldName, propertyName, propertyTypeName, True, fieldName, "")
 End Function
-
 Private Function GetPropertyInfoAsRelatedTable1toN(keyTable, keyfield, relatedfieldName)
     Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
                 
@@ -462,7 +451,6 @@ Private Function GetPropertyInfo(propertyFieldName, propertyName, propertyTypeNa
     arr(PropertyInfoIndex.ecDbRelatedFieldName) = relatedfieldName
     GetPropertyInfo = arr
 End Function
-
 Private Function ConvertDbTableNameToEntitesClassName(dbTbleName As String) As String
     ConvertDbTableNameToEntitesClassName = GetEstimatedPluralName(ConvertSnakeToPascalCase(dbTbleName))
 End Function
@@ -529,5 +517,4 @@ Private Sub Class_Terminate()
     If catalog_ Is Nothing Then Else Set catalog_ = Nothing
     If cn_ Is Nothing Then Else If cn_.State > 0 Then cn_.Close
 End Sub
-
 

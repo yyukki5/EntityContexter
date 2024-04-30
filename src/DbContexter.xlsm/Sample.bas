@@ -3,22 +3,15 @@ Option Explicit
 
 
 Sub Sample()
-
-    Dim dbc As New DbContext
+    Dim dbc As New DbContextSample
+    Dim tbl1s As New Table1s
+    
     dbc.Init
-    
-'    reqs = dbc.Requests.WhereEvaluate("x => x.Name = 'abc'").Any()
-    
-    Dim v As Tag, r As Request
-    For Each r In dbc.Requests.items
-        For Each v In r.Tags.items
-            If v.KeyItems.items.Count > 0 Then
-                Debug.Print r.RequesterName & ", " & vbTab & v.TagId & ":" & v.Name & " --- " & v.KeyItems.item(1).Name
-            Else
-                Debug.Print r.RequesterName & ", " & vbTab & v.TagId & ":" & v.Name
-            End If
-        Next
-    Next
-End Sub
+    Set tbl1s = dbc.Table1s
+    Debug.Print tbl1s(1).Table2.Gen         ' 2
+    Debug.Print tbl1s(1).Table2.MemberName  ' subaru.oozora
+    Debug.Print tbl1s(1).Table3s(1).TagName ' protein the subaru
+    Debug.Print tbl1s(1).Ddate              ' 2018/09/16
 
+End Sub
 

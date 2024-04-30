@@ -10,6 +10,7 @@ bin/*.xls?
 bin/old/
 bin/backup/
 bin/resorce/db/
+bin/*.cls
 vbac.wsf
 *.doccls
 *.bat

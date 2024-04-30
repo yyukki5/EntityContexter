@@ -19,7 +19,8 @@ Private Const VBA_CLASS_MODULE_ID As Long = 2
 
 Private cn_ As ADODB.Connection
 Private catalog_ As ADOX.catalog
-    
+Private isExportFiles_ As Boolean
+
 Private Enum PropertyInfoIndex
     [_Init]
     ecPropertyName
@@ -43,6 +44,7 @@ End Enum
 Private Sub Class_Initialize()
     Set cn_ = New ADODB.Connection
     Set catalog_ = New ADOX.catalog
+    isExportFiles_ = True
 End Sub
 
 Public Function Init() As EntityContexter
@@ -53,7 +55,7 @@ Public Function Init() As EntityContexter
 '    End With
 
     With cn_
-        .connectionString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" & ThisWorkbook.Path & "\resorce\db\Test.accdb"
+        .connectionString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" & ThisWorkbook.path & "\resorce\db\Test.accdb"
         .Open
     End With
 
@@ -115,8 +117,12 @@ Public Function FetchRecords(tableName, T As Object) As Collection
     Set FetchRecords = items
 End Function
 
-Public Function ScaffoldDataBese() As Collection
+Public Function ScaffoldDataBese(Optional usingAttribute As Boolean) As Collection
     Dim tableName, tableNames As New Collection, entityInfos As New Collection, entityInfo As Collection
+    
+    ' setting
+    isExportFiles_ = usingAttribute
+    
     
     ' get table names
     Set tableNames = GetTableNameFromDb()
@@ -158,6 +164,7 @@ Private Function FetchRecordSet(tableName As String) As Recordset
     query = "SELECT * FROM [" & tableName & "]"
     Set FetchRecordSet = cn_.Execute(query)
 End Function
+
 
 Private Function GetTableNameFromDb() As Collection
     Dim tableNames As New Collection, tbl As ADOX.Table
@@ -203,26 +210,60 @@ End Function
 
 Private Function CreateEntityClassFromTableName(tableEntityInfo As Collection)
     Dim EntityClass As Object, EntitiesClass As Object, codeEntityClass As String, codeEntitiesClass As String
-    
+        
     codeEntityClass = GetEntityCode(tableEntityInfo(ecEntityClassName), tableEntityInfo(ecPropertyInfo))
-    codeEntitiesClass = GetEntitesCode(tableEntityInfo(ecDbTableName), tableEntityInfo(ecEntityClassName))
+    codeEntitiesClass = GetEntitesCode(tableEntityInfo(ecEntitesClassName), tableEntityInfo(ecEntityClassName))
 
-    ' only force update (all delete and re-insert)
-    ' EntityClass
-    Set EntityClass = AddClassModule(tableEntityInfo(ecEntityClassName))
-    EntityClass.CodeModule.DeleteLines 1, EntityClass.CodeModule.CountOfLines
-    EntityClass.CodeModule.InsertLines 1, codeEntityClass
-    Debug.Print tableEntityInfo(ecEntityClassName); ": done"
+    If isExportFiles_ Then
+        ' option1 using write file and import file. to using attribute key word in class module.
+        AddClassModuleFromFile tableEntityInfo(EntityInfoIndex.ecEntityClassName), codeEntityClass
+        AddClassModuleFromFile tableEntityInfo(EntityInfoIndex.ecEntitesClassName), codeEntitiesClass
+    Else
+        ' option2 using CodeModule.Insertlines()
+        ' only force update (all delete and re-insert)
+        ' EntityClass
+        Set EntityClass = AddClassModule(tableEntityInfo(ecEntityClassName))
+        EntityClass.CodeModule.DeleteLines 1, EntityClass.CodeModule.CountOfLines
+        EntityClass.CodeModule.InsertLines 1, codeEntityClass
+        Debug.Print tableEntityInfo(ecEntityClassName); ": done"
+        
+        Set EntitiesClass = AddClassModule(tableEntityInfo(ecEntitesClassName))
+        EntitiesClass.CodeModule.DeleteLines 1, EntitiesClass.CodeModule.CountOfLines
+        EntitiesClass.CodeModule.InsertLines 1, codeEntitiesClass
+    End If
     
-    Set EntitiesClass = AddClassModule(tableEntityInfo(ecEntitesClassName))
-    EntitiesClass.CodeModule.DeleteLines 1, EntitiesClass.CodeModule.CountOfLines
-    EntitiesClass.CodeModule.InsertLines 1, codeEntitiesClass
     Debug.Print tableEntityInfo(ecEntitesClassName); ": done"
-
 End Function
+
+Private Function AddClassModuleFromFile(className, codes)
+    Dim classFilePath As String
+    classFilePath = ThisWorkbook.path & "\" & className & ".cls"
+    CreateClassModuleFile classFilePath, codes
+    ImportClassModuleFile classFilePath, className
+    DeleteClassModuleFile classFilePath
+End Function
+Private Function DeleteClassModuleFile(classFilePath)
+    Kill classFilePath
+End Function
+Private Function CreateClassModuleFile(classFilePath, codes)
+    Dim fso As Object, txtFile As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Set txtFile = fso.CreateTextFile(classFilePath, True)
+    txtFile.Write codes
+End Function
+Private Function ImportClassModuleFile(classFilePath, className)
+    Dim vbc As Object
+    With Application.VBE.ActiveVBProject
+        For Each vbc In .VBComponents
+            If vbc.Name = className Then .VBComponents.Remove .VBComponents(className)
+        Next
+        .VBComponents.Import classFilePath
+    End With
+End Function
+
 Private Function AddClassModule(className As String) As Object
     Dim clsModule As Object
-    
+
     With Application.VBE.ActiveVBProject
         Set clsModule = GetVBComponent(className)
         If clsModule Is Nothing Then
@@ -250,15 +291,35 @@ Private Function GetDbContextCode(tableEntityInfos As Collection) As String
     Dim texts As New Collection, str As String, txt
     GetDbContextCode = str
 End Function
-Private Function GetEntitesCode(tableName As String, entityName As String) As String
+Private Function GetEntitesCode(entitiesName As String, entityName As String) As String
     Dim texts As New Collection, str As String, txt
     
     With texts
+        If isExportFiles_ Then
+            .Add "VERSION 1.0 CLASS"
+            .Add "BEGIN"
+            .Add "  MultiUse = -1  'True"
+            .Add "End"
+            .Add "Attribute VB_Name = """ & entitiesName & """"
+            .Add "Attribute VB_GlobalNameSpace = False"
+            .Add "Attribute VB_Creatable = False"
+            .Add "Attribute VB_PredeclaredId = False"
+            .Add "Attribute VB_Exposed = False"
+        End If
         .Add "Option Explicit"
         .Add ""
         .Add "Private items_ As New Collection"
         .Add ""
+        If isExportFiles_ Then
+            .Add "Public Property Get NewEnum() As IUnknown"
+            .Add "    Attribute NewEnum.VB_UserMemId = -4"
+            .Add "    Set NewEnum = items_.[_NewEnum]"
+            .Add "End Property"
+        End If
         .Add "Public Property Get item(index As Long) As " & entityName
+        If isExportFiles_ Then
+            .Add "Attribute item.VB_UserMemId = 0"
+        End If
         .Add "    Set item = items_.item(index)"
         .Add "End Property"
         .Add "Public Property Get items() As Collection"
@@ -271,6 +332,7 @@ Private Function GetEntitesCode(tableName As String, entityName As String) As St
         .Add "Public Function Add(T As Object)"
         .Add "    items_.Add T"
         .Add "End Function"
+
     End With
     For Each txt In texts: str = str + txt + vbCrLf: Next
     
@@ -280,6 +342,17 @@ Private Function GetEntityCode(entityName As String, propertyInfo As Collection)
     Dim texts As New Collection, pInfo, str As String, txt
     
     With texts
+        If isExportFiles_ Then
+            .Add "VERSION 1.0 CLASS"
+            .Add "BEGIN"
+            .Add "  MultiUse = -1  'True"
+            .Add "End"
+            .Add "Attribute VB_Name = """ & entityName & """"
+            .Add "Attribute VB_GlobalNameSpace = False"
+            .Add "Attribute VB_Creatable = False"
+            .Add "Attribute VB_PredeclaredId = False"
+            .Add "Attribute VB_Exposed = False"
+        End If
         .Add "Option Explicit"
         .Add ""
         For Each pInfo In propertyInfo

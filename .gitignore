@@ -9,7 +9,7 @@
 bin/*.xls?
 bin/old/
 bin/backup/
-bin/resorce/db/
+bin/resorce/
 bin/*.cls
 vbac.wsf
 *.doccls
@@ -19,9 +19,9 @@ vbac.wsf
 # remove files for release
 UnitTest.cls
 UnitTests.bas
-src/
-!src/EntityContexter.cls
-!src/Sample.bas
+src/DbContexter.xlsm/*
+!src/DbContexter.xlsm/EntityContexter.cls
+!src/DbContexter.xlsm/Sample.bas
 !src/DbContexter.xlsm/DbContextSample.cls
 
 # User-specific files

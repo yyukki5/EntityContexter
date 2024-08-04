@@ -48,15 +48,13 @@ Private Sub Class_Initialize()
     isExportFiles_ = True
 End Sub
 
-Public Function Init(connectionString As String) As EntityContexter
-    With cn_
-        .connectionString = connectionString
-        .Open
-    End With
+Public Function Initialize(connectionString As String) As EntityContexter
 
-    catalog_.ActiveConnection = cn_.connectionString
+    connectionString_ = connectionString
+    cn_.connectionString = connectionString
+    catalog_.ActiveConnection = connectionString
     
-    Set Init = Me
+    Set Initialize = Me
 End Function
 
 Function SetRelationShip1toN(primaryKey As Object, primaryKeyPropertyName As String, foreignKey As Object, foreignKeyPropertyName As String)

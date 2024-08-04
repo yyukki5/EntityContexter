@@ -22,6 +22,8 @@ Private Const VBA_CLASS_MODULE_ID As Long = 2
 Private cn_ As ADODB.Connection
 Private catalog_ As ADOX.catalog
 Private isExportFiles_ As Boolean
+Private schemaName_ As String
+Private connectionString_ As String
 
 Private Enum PropertyInfoIndex
     [_Init]
@@ -108,11 +110,13 @@ Public Function FetchRecords(tableName, T As Object) As Collection
     Set FetchRecords = items
 End Function
 
-Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True) As Collection
+
+Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, Optional schema_name As String) As Collection
     Dim tableName, tableNames As New Collection, entityInfos As New Collection, entityInfo As Collection
     
     ' setting
     isExportFiles_ = usingAttribute
+    schemaName_ = schema_name
     
     ' get table names
     Set tableNames = GetTableNameFromDb()
@@ -131,10 +135,9 @@ Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True) As C
     For Each tableName In tableNames
         CreateEntityClassFromTableName entityInfos(tableName)
         Debug.Print tableName & ": done"
-
     Next
     ' to be implement:  create DbContext.cls
-'    CreateDbContect entityInfos
+    Call CreateDbContext(entityInfos)
     Debug.Print "- Done -------"
     
     ' for test
@@ -149,7 +152,14 @@ End Function
 ' Private Methods ----------------------------------------------------------------
 Private Function FetchRecordSet(tableName As String) As Recordset
     Dim query As String
+    
+    If HasSchema Then
+        query = "SELECT * FROM [" & schemaName_ & "].[" & tableName & "]"
+    Else
     query = "SELECT * FROM [" & tableName & "]"
+    End If
+    
+    If cn_.State <> adStateOpen Then cn_.Open
     Set FetchRecordSet = cn_.Execute(query)
 End Function
 

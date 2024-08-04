@@ -143,10 +143,175 @@ Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, Opti
     ' for test
     Set ScaffoldDataBese = entityInfos
 End Function
+Private Sub MoveToRecord(rs As ADODB.Recordset, rec As Object, DbInfo As Collection)
+    Dim index_field As String, index_value, table_name As String, prop As Collection
 
 Public Function GetKeyFieldNameByPropertyName(tbl As Object, propertyName As String) As String
     GetKeyFieldNameByPropertyName = CallByName(tbl, "GetKeyFieldName", VbMethod, propertyName)
+
+Public Function Insert(rec As Object, DbInfo As Object)
+    Dim rs As New ADODB.Recordset, fl, vl
+    Dim table_name As String, exceptional_field As String, exceptional_prop As Collection
+        
+    table_name = GetTableNameByEntity(rec, DbInfo)
+    
+    fl = GetFieldsListByEntity(rec, DbInfo)
+    vl = GetValuesListByEntity(rec, DbInfo)
+    
+On Error GoTo errOpen
+    If cn_.State <> adStateOpen Then cn_.Open
+    Call rs.Open(Source:=GetTableNameByEntity(rec, DbInfo), ActiveConnection:=cn_, LockType:=adLockOptimistic)
+
+    Call cn_.BeginTrans
+On Error GoTo errTrans
+    Call rs.AddNew(fl, vl)
+    Call SetAutoAutoincrementValues(rec, DbInfo, rs)
+    Call rs.Close
+    Call cn_.CommitTrans
+    Exit Function
+
+errTrans:
+    cn_.RollbackTrans
+errOpen:
+    Err.Raise Err.Number, Err.Source & vbCrLf & "EntityContexter.Insert()", Err.Description
 End Function
+
+Public Function Update(rec As Object, DbInfo As Object)
+    Dim rs As New ADODB.Recordset, fl, vl
+    
+    fl = GetFieldsListByEntity(rec, DbInfo)
+    vl = GetValuesListByEntity(rec, DbInfo)
+    
+On Error GoTo errOpen
+    If cn_.State <> adStateOpen Then cn_.Open
+    Call rs.Open(Source:=GetTableNameByEntity(rec, DbInfo), ActiveConnection:=cn_, LockType:=adLockOptimistic)
+        
+    Call cn_.BeginTrans
+On Error GoTo errTrans
+    Call MoveToRecord(rs, rec, DbInfo)
+    Call rs.Update(fl, vl)
+    Call rs.Close
+    Call cn_.CommitTrans
+    Exit Function
+
+errTrans:
+    cn_.RollbackTrans
+errOpen:
+    Err.Raise Err.Number, Err.Source & vbCrLf & "EntityContexter.Update()", Err.Description
+End Function
+
+Public Function Delete(rec As Object, DbInfo As Object)
+    Dim rs As New ADODB.Recordset
+    
+On Error GoTo errOpen
+    If cn_.State <> adStateOpen Then cn_.Open
+    Call rs.Open(Source:=GetTableNameByEntity(rec, DbInfo), ActiveConnection:=cn_, LockType:=adLockOptimistic)
+        
+    Call cn_.BeginTrans
+On Error GoTo errTrans
+    Call MoveToRecord(rs, rec, DbInfo)
+    Call rs.Delete(adAffectCurrent)
+    Call rs.Close
+    Call cn_.CommitTrans
+    Exit Function
+
+errTrans:
+    cn_.RollbackTrans
+    If rs.State <> adStateClosed Then Call rs.Close
+errOpen:
+    Err.Raise Err.Number, Err.Source & vbCrLf & "EntityContexter.Delete()", Err.Description
+End Function
+
+Private Sub MoveToRecord(rs As ADODB.Recordset, rec As Object, DbInfo As Collection)
+    Dim index_field As String, index_value, table_name As String, prop As Collection
+
+    table_name = GetTableNameByEntity(rec, DbInfo)
+    index_field = DbInfo(table_name)("PrimaryKey")
+    For Each prop In DbInfo(table_name)("Properties")
+        If prop("dbFieldName") = index_field Then index_value = CallByName(rec, prop("PropertyName"), VbGet)
+    Next
+    
+    rs.MoveFirst
+    Do Until rs.EOF
+        If rs.Fields(index_field).Value = index_value Then Exit Do
+        rs.MoveNext
+    Loop
+End Sub
+
+Private Function GetValuesListByEntity(rec As Object, DbInfo As Object)
+    Dim i As Long, value_list, table_name As String, props As Collection, prop As Collection, col As New Collection
+        
+    table_name = GetTableNameByEntity(rec, DbInfo)
+    Set props = DbInfo(table_name)("Properties")
+    
+    For Each prop In props
+        If prop("Autoincrement") = False Then _
+            col.Add CallByName(rec, prop("PropertyName"), VbGet)
+    Next
+    GetValuesListByEntity = CollectionToArray(col)
+
+End Function
+
+Private Function SetAutoAutoincrementValues(rec As Object, DbInfo As Object, rs As ADODB.Recordset)
+    Dim i As Long, table_name As String, prop As Collection
+    
+    table_name = GetTableNameByEntity(rec, DbInfo)
+    i = 0
+    For Each prop In DbInfo(table_name)("Properties")
+        i = i + 1
+        If prop("Autoincrement") = True Then
+            Call CallByName(rec, prop("PropertyName"), VbLet, rs.Fields(prop("DbFieldName")).Value)
+        End If
+    Next
+End Function
+
+
+Private Function GetFieldsListByEntity(rec As Object, DbInfo As Object)
+    Dim i As Long, value_list, table_name As String, props As Collection, prop As Collection, col As New Collection
+        
+    table_name = GetTableNameByEntity(rec, DbInfo)
+    Set props = DbInfo(table_name)("Properties")
+        
+    For Each prop In props
+        If prop("Autoincrement") = False Then _
+            col.Add prop("dbFieldName")
+    Next
+    GetFieldsListByEntity = CollectionToArray(col)
+        
+End Function
+
+Private Function GetTableNameByEntity(rec As Object, DbInfo As Object) As String
+    Dim table_name As String, info As Collection
+    
+    For Each info In DbInfo
+        If info("EntityClassName") = TypeName(rec) Then table_name = info("DBTableName")
+    Next
+    
+    GetTableNameByEntity = table_name
+End Function
+
+Private Function GetPrimaryKeyByEntity(rec As Object, DbInfo As Object) As String
+    Dim info As Collection
+    
+    For Each info In DbInfo
+        If info("EntityClassName") = TypeName(rec) Then GetPrimaryKeyByEntity = info("PrimaryKey")
+    Next
+    
+End Function
+
+Private Function GetDBInfoPropertyByFieldName(field_Name As String, table_name As String, DbInfo As Object) As Collection
+    Dim prop As Collection
+    
+    For Each prop In DbInfo(table_name)("Properties")
+        If prop("DbFieldName") = field_Name Then Set GetDBInfoPropertyByFieldName = prop
+    Next
+    
+End Function
+
+Private Property Get HasSchema() As Boolean
+    HasSchema = schemaName_ <> ""
+End Property
+
 
 
 ' Private Methods ----------------------------------------------------------------

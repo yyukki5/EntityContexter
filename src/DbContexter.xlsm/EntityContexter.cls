@@ -10,11 +10,11 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' Entity Contexer -----------------------------------------------------------------
-' Version       : 0.1.0
-' Project       : https://github.com/yyukki5/EntityContexter
-' Depend on     : Microsoft ActiveX Data Objects X.X Library, Microsoft ADO Ext. 2.8 for DDL and Security
-' Before Using  : Need to check "Trust access to the VBA project object model"
-' Function      : Scaffolding DB
+' Version   : 0.2.0
+' Project   : https://github.com/yyukki5/EntityContexter
+' Depend on : Microsoft ActiveX Data Objects X.X Library, Microsoft ADO Ext. 2.8 for DDL and Security
+' Before Using : Need to check "Trust access to the VBA project object model"
+' Function     : Scaffolding DB, Update, Insert, Delete
 ' ---------------------------------------------------------------------------------
 
 Private Const VBA_CLASS_MODULE_ID As Long = 2

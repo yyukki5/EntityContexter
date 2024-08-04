@@ -137,7 +137,7 @@ Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, Opti
         Debug.Print tableName & ": done"
     Next
     ' to be implement:  create DbContext.cls
-    Call CreateDbContext(entityInfos)
+    Call CreateDbContext(entityInfos, dbcontext_name)
     Debug.Print "- Done -------"
     
     ' for test
@@ -369,6 +369,21 @@ nextLoop:
         Next
     Next
 End Function
+
+
+Private Function CreateDbContext(tableEntityInfos As Collection, dbcontext_name As String)
+    Dim codeDbcClass As String
+    
+    codeDbcClass = GetDbContextCode(tableEntityInfos, dbcontext_name)
+    If isExportFiles_ Then
+        AddClassModuleFromFile "DBContext", codeDbcClass
+    Else
+    
+    End If
+    
+
+End Function
+
 Private Function CreateEntityClassFromTableName(tableEntityInfo As Collection)
     Dim EntityClass As Object, EntitiesClass As Object, codeEntityClass As String, codeEntitiesClass As String
         
@@ -451,10 +466,97 @@ Private Function GetVBComponent(componentName As String) As Object
         Next
     End With
 End Function
-Private Function GetDbContextCode(tableEntityInfos As Collection) As String
+
+Private Function GetDbContextCode(infos As Collection, dbc_name As String) As String
     Dim texts As New Collection, str As String, txt
+    Dim info As Collection, prop As Collection
+    Const DB_TABLE_NAME As String = "DBTableName"
+    
+    
+    With texts
+        If isExportFiles_ Then
+            .Add "VERSION 1.0 CLASS"
+            .Add "BEGIN"
+            .Add "  MultiUse = -1  'True"
+            .Add "End"
+            .Add "Attribute VB_Name = """ & dbc_name & """"
+            .Add "Attribute VB_GlobalNameSpace = False"
+            .Add "Attribute VB_Creatable = False"
+            .Add "Attribute VB_PredeclaredId = False"
+            .Add "Attribute VB_Exposed = False"
+        End If
+        .Add "Option Explicit"
+        .Add ""
+        .Add "Private ec_ As EntityContexter"
+        .Add ""
+        .Add "Private Sub Class_Initialize()"
+        .Add "    Set ec_ = New EntityContexter"
+        .Add "End Sub"
+        .Add ""
+        .Add "Public Function Initialize(connection_string As String)"
+        .Add ""
+        .Add "    Call ec_.Initialize(connection_string)"
+        .Add ""
+        .Add "End Function"
+        .Add ""
+        .Add "Public Function Insert(rec As Object)"
+        .Add ""
+        .Add "    Call ec_.Insert(rec, DBInfo)"
+        .Add ""
+        .Add "End Function"
+        .Add ""
+        .Add "Public Function Update(rec As Object)"
+        .Add ""
+        .Add "    Call ec_.Update(rec, DBInfo)"
+        .Add ""
+        .Add "End Function"
+        .Add ""
+        .Add "Public Function Delete(rec As Object)"
+        .Add ""
+        .Add "    Call ec_.Delete(rec, DBInfo)"
+        .Add ""
+        .Add "End Function"
+        .Add ""
+        .Add "Private Property Get DbInfo() As Collection"
+        .Add "    Dim infos As New Collection, info As Collection, props As Collection, prop As Collection"
+        .Add ""
+        For Each info In infos
+            .Add "    Set info = New Collection"
+            .Add "    Call info.Add(""" & info("DBTableName") & """, ""DBTableName"")"
+            .Add "    Call info.Add(""" & info("EntityClassName") & """, ""EntityClassName"")"
+            .Add "    Call info.Add(""" & info("EntitiesClassName") & """, ""EntitiesClassName"")"
+            .Add "    Call info.Add(""" & info("PrimaryKey") & """, ""PrimaryKey"")"
+            .Add ""
+            .Add "    Set props = New Collection"
+            For Each prop In info("Properties")
+                If prop("IsLet") Then
+                    .Add "    Set prop = New Collection"
+                    .Add "    Call prop.Add(""" & prop("PropertyName") & """, ""PropertyName"")"
+                    .Add "    Call prop.Add(""" & prop("ClassFieldName") & """, ""ClassFieldName"")"
+                    .Add "    Call prop.Add(""" & prop("PropertyType") & """, ""PropertyType"")"
+                    .Add "    Call prop.Add(""" & prop("DbFieldName") & """, ""DbFieldName"")"
+                    .Add "    Call prop.Add(""" & prop("ForeignKey") & """, ""ForeignKey"")"
+                    .Add "    Call prop.Add(" & prop("Autoincrement") & ", ""Autoincrement"")"
+                    '.Add "    Call prop.Add(""" & prop(4) & """, ""PrimaryKey"")"
+                    .Add "    Call props.Add(prop, """ & prop("PropertyName") & """)"
+                End If
+            Next
+            .Add "    Call info.Add(props, ""Properties"")"
+            .Add "    Call infos.Add(info, """ & info("DBTableName") & """)"
+            .Add ""
+            .Add ""
+        Next
+        .Add ""
+        .Add "    Set DbInfo = infos"
+        .Add "End Property"
+        .Add ""
+    End With
+        
+    For Each txt In texts: str = str + txt + vbCrLf: Next
     GetDbContextCode = str
 End Function
+
+
 Private Function GetEntitesCode(entitiesName As String, entityName As String) As String
     Dim texts As New Collection, str As String, txt
     

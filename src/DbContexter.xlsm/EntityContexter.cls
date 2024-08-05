@@ -19,6 +19,19 @@ Option Explicit
 
 Private Const VBA_CLASS_MODULE_ID As Long = 2
 
+Private Const EC_KEY_ENTITY_DB_COLUMN As String = "Column"
+Private Const EC_KEY_ENTITY_PROPERTY_NAME As String = "PropertyName"
+Private Const EC_KEY_ENTITY_FIELD_NAME As String = "ClassFieldName"
+Private Const EC_KEY_ENTITY_PROPERTY_TYPE As String = "PropertyType"
+Private Const EC_KEY_ENTITY_IS_PROPERTY_RELATED As String = "RelatedProperty"
+Private Const EC_KEY_ENTITY_PROPERTIES As String = "Properties"
+
+Private Const EC_KEY_ENTITY_CLASS_NAME As String = "EntityClassName"
+Private Const EC_KEY_ENTITIES_CLASS_NAME As String = "EntitiesClassName"
+Private Const EC_KEY_ENTITY_DB_TABLE As String = "DbTable"
+
+    
+
 Private cn_ As ADODB.Connection
 Private catalog_ As ADOX.catalog
 Private isExportFiles_ As Boolean
@@ -64,7 +77,7 @@ Public Function Initialize(connectionString As String) As EntityContexter
     Set Initialize = Me
 End Function
 
-Function SetRelationShip1toN(primaryKey As Object, primaryKeyPropertyName As String, foreignKey As Object, foreignKeyPropertyName As String)
+Public Function SetRelationShip1toN(primaryKey As Object, primaryKeyPropertyName As String, foreignKey As Object, foreignKeyPropertyName As String)
     Dim primaryKeyObject As Object, foreignKeyObject As Object
 
     For Each primaryKeyObject In primaryKey.items
@@ -77,7 +90,7 @@ Function SetRelationShip1toN(primaryKey As Object, primaryKeyPropertyName As Str
     Next
 End Function
 
-Function SetRelationShipNto1(primaryKey As Object, primaryKeyPropertyName As String, foreignKey As Object, foreignKeyPropertyName As String)
+Public Function SetRelationShipNto1(primaryKey As Object, primaryKeyPropertyName As String, foreignKey As Object, foreignKeyPropertyName As String)
     Dim primaryKeyObject As Object, foreignKeyObject As Object
 
     For Each primaryKeyObject In primaryKey.items
@@ -116,8 +129,11 @@ Public Function FetchRecords(tableName, T As Object) As Collection
 End Function
 
 
-Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, Optional schema_name As String, Optional dbcontext_name As String = "DbContext") As Collection
-    Dim tableName, tableNames As New Collection, entityInfos As New Collection, entityInfo As Collection
+Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, _
+                                 Optional schema_name As String, _
+                                 Optional dbcontext_name As String = "DbContext" _
+                                 ) As Collection
+    Dim tableName, tableNames As New Collection, entityInfos As New Collection, EntityInfo As Collection
     
     ' setting
     isExportFiles_ = usingAttribute
@@ -128,10 +144,11 @@ Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, Opti
     
     ' create class module code from ADOX.catalog by table name
     For Each tableName In tableNames
-        Set entityInfo = New Collection
-        SetEntityInfoFromTable CStr(tableName), entityInfo
-        entityInfos.Add entityInfo, tableName
+        Set EntityInfo = New Collection
+        SetEntityInfoFromTable CStr(tableName), EntityInfo
+        entityInfos.Add EntityInfo, tableName
     Next
+    
     ' Add relationship to class module code
     SetEntityInfoRelatedColumns entityInfos
                 
@@ -147,12 +164,6 @@ Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, Opti
     
     ' for test
     Set ScaffoldDataBese = entityInfos
-End Function
-
-Public Function GetKeyFieldNameByPropertyName(tbl As Object, propertyName As String) As String
-    
-    GetKeyFieldNameByPropertyName = CallByName(tbl, "GetKeyFieldName", VbMethod, propertyName)
-
 End Function
 
 
@@ -359,32 +370,133 @@ errLabel:
     Err.Raise 10000, Err.Source & vbCrLf & "at EntityContexter.GetTableNameFromDb()", Err.Description
 End Function
 
-Private Function SetEntityInfoFromTable(tableName As String, ByRef entityInfo As Collection)
-    Dim props As New Collection, tbl As ADOX.Table, col As ADOX.Column, ky As ADOX.Key, dummy As Object, i As Long
+
+Private Function GetPropertyInfoAsTable(col As ADOX.Column)
+    Dim fieldName As String, fieldType As ADODB.DataTypeEnum, actualValue As Variant
+    Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
+        
+    propertyName = ConvertDbFieldNameToClassPropertyName(col.Name)
+    propertyFieldName = ConvertDBFieldNameToClassFieldName(col.Name)
+    propertyTypeName = GetEntityPropertyTypeBy(col)
+        
+    Dim prop As New Collection
+    Call prop.Add(propertyName, EC_KEY_ENTITY_PROPERTY_NAME)
+    Call prop.Add(propertyFieldName, EC_KEY_ENTITY_FIELD_NAME)
+    Call prop.Add(propertyTypeName, EC_KEY_ENTITY_PROPERTY_TYPE)
+    Call prop.Add(False, EC_KEY_ENTITY_IS_PROPERTY_RELATED)
+    Call prop.Add(col, EC_KEY_ENTITY_DB_COLUMN)
+
+'    Call prop.Add(True, "IsLet")
+'    Call prop.Add(col.Name, "DbFieldName")
+'    Call prop.Add("", "ForeignKey")
+'    Call prop.Add("", "PrimaryKey")
+'    If IsNull(GetPropertyByName(col.Properties, "Autoincrement")) = False Then _
+'        Call prop.Add(GetPropertyByName(col.Properties, "Autoincrement").Value, "Autoincrement")
+        
+' - Property
+'   - ClassPropertyName
+'   - ClassFieldName
+'   - ClassPropertyType
+'   - ADOX.Column
+'     - Name
+'     - Properties
+'     - Type
+
+
+    Set GetPropertyInfoAsTable = prop
     
-    For Each col In catalog_.Tables(tableName).Columns
-        props.Add GetPropertyInfoAsTable(col)
+End Function
+
+Private Function GetPropertyInfoAsRelatedTableNto1(keyTable, col As ADOX.Column)
+    Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
+                
+    propertyName = ConvertDbTableNameToEntityClassName(CStr(keyTable))
+    propertyFieldName = ConvertDBFieldNameToClassFieldName(CStr(keyTable))
+    propertyTypeName = propertyName
+    
+    Dim prop As New Collection
+    Call prop.Add(propertyName, EC_KEY_ENTITY_PROPERTY_NAME)
+    Call prop.Add(propertyFieldName, EC_KEY_ENTITY_FIELD_NAME)
+    Call prop.Add(propertyTypeName, EC_KEY_ENTITY_PROPERTY_TYPE)
+    Call prop.Add(True, EC_KEY_ENTITY_IS_PROPERTY_RELATED)
+    Call prop.Add(col, EC_KEY_ENTITY_DB_COLUMN)
+    
+    Set GetPropertyInfoAsRelatedTableNto1 = prop
+End Function
+
+Private Function GetPropertyInfoAsRelatedTable1toN(keyTable, col As ADOX.Column)
+    Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
+                
+    propertyName = ConvertDbTableNameToEntitesClassName(CStr(keyTable))
+    propertyFieldName = ConvertDbTableNameToEntitiesClassFieldName(CStr(keyTable))
+    propertyTypeName = propertyName
+    
+    Dim prop As New Collection
+    Call prop.Add(propertyName, EC_KEY_ENTITY_PROPERTY_NAME)
+    Call prop.Add(propertyFieldName, EC_KEY_ENTITY_FIELD_NAME)
+    Call prop.Add(propertyTypeName, EC_KEY_ENTITY_PROPERTY_TYPE)
+    Call prop.Add(True, EC_KEY_ENTITY_IS_PROPERTY_RELATED)
+    Call prop.Add(col, EC_KEY_ENTITY_DB_COLUMN)
+    
+    Set GetPropertyInfoAsRelatedTable1toN = prop
+End Function
+
+
+Private Function SetEntityInfoFromTable(tableName As String, ByRef EntityInfo As Collection)
+    Dim props As New Collection, tbl As ADOX.Table, col As ADOX.Column, ky As ADOX.Key, dummy As Object, i As Long
+    Dim prop As Collection
+    
+    Set tbl = catalog_.Tables(tableName)
+    
+    For Each col In tbl.Columns
+        Set prop = GetPropertyInfoAsTable(col)
+        Call props.Add(prop, prop(EC_KEY_ENTITY_PROPERTY_NAME))
     Next
-    Call entityInfo.Add(tableName, "DBTableName")
-    Call entityInfo.Add(ConvertDbTableNameToEntityClassName(tableName), "EntityClassName")
-    Call entityInfo.Add(ConvertDbTableNameToEntitesClassName(tableName), "EntitiesClassName")
-    Call entityInfo.Add(catalog_.Tables(tableName).Indexes("PrimaryKey").Columns(0).Name, "PrimaryKey")
-    Call entityInfo.Add(props, "Properties")
+    
+    Call EntityInfo.Add(ConvertDbTableNameToEntityClassName(tableName), EC_KEY_ENTITY_CLASS_NAME)
+    Call EntityInfo.Add(ConvertDbTableNameToEntitesClassName(tableName), EC_KEY_ENTITIES_CLASS_NAME)
+    Call EntityInfo.Add(tbl, EC_KEY_ENTITY_DB_TABLE)
+    
+'    Call EntityInfo.Add(catalog_.Tables(tableName).Indexes("PrimaryKey").Columns(0).Name, "PrimaryKey")
+'    Call EntityInfo.Add(tableName, "DBTableName")
+'    Call EntityInfo.Add(tbl.Keys, "Keys")
+'    Call EntityInfo.Add(tbl.Indexes, "Indexes")
+'    Call EntityInfo.Add(tbl.Properties, "TableProperties")
+'    Call EntityInfo.Add(tbl.Type, "TableType")
+    
+    Call EntityInfo.Add(props, EC_KEY_ENTITY_PROPERTIES)
+    
+' - EntityInfo (Properties)
+'   - EntityClassName
+'   - EntitiesClassName
+'   - DbTable
+'     - Name
+'     - Indexes
+'     - Keys
+'     - Properties
+'     - Type
+'   - EntityProperties
+    
+    
     
 End Function
 
 Private Function SetEntityInfoRelatedColumns(ByRef entityInfos As Collection)
-    Dim entityInfo As Collection, propertyNameTypes As New Collection, col As ADOX.Column, ky As ADOX.Key, tableName As String
-    
-    For Each entityInfo In entityInfos
-        tableName = entityInfo("DBTableName")
-        For Each ky In catalog_.Tables(tableName).Keys
+    Dim EntityInfo As Collection, propertyNameTypes As New Collection, col As ADOX.Column, ky As ADOX.Key, tableName As String
+    Dim tbl As ADOX.Table
+    Dim prop As Collection, props As Collection
+    For Each EntityInfo In entityInfos
+        Set tbl = EntityInfo(EC_KEY_ENTITY_DB_TABLE)
+        For Each ky In tbl.Keys
             If ky.Type <> adKeyForeign Then GoTo nextloop
             For Each col In ky.Columns
-                entityInfo("Properties").Add _
-                    GetPropertyInfoAsRelatedTableNto1(ky.RelatedTable, col.Name, col.RelatedColumn)
-                entityInfos(ky.RelatedTable)("Properties").Add _
-                    GetPropertyInfoAsRelatedTable1toN(tableName, col.RelatedColumn, col.Name)
+                Set prop = GetPropertyInfoAsRelatedTableNto1(ky.RelatedTable, col)
+                Call EntityInfo(EC_KEY_ENTITY_PROPERTIES).Add(prop, prop(EC_KEY_ENTITY_PROPERTY_NAME))
+                
+                Set prop = New Collection
+                Set prop = GetPropertyInfoAsRelatedTable1toN(tbl.Name, col)
+                Call entityInfos(ky.RelatedTable).item(EC_KEY_ENTITY_PROPERTIES).Add(prop, prop(EC_KEY_ENTITY_PROPERTY_NAME))
+
             Next
 nextloop:
         Next
@@ -408,13 +520,13 @@ End Function
 Private Function CreateEntityClassFromTableName(tableEntityInfo As Collection)
     Dim EntityClass As Object, EntitiesClass As Object, codeEntityClass As String, codeEntitiesClass As String
         
-    codeEntityClass = GetEntityCode(tableEntityInfo("EntityClassName"), tableEntityInfo("Properties"))
-    codeEntitiesClass = GetEntitesCode(tableEntityInfo("EntitiesClassName"), tableEntityInfo("EntityClassName"))
+    codeEntityClass = GetEntityCode(tableEntityInfo(EC_KEY_ENTITY_CLASS_NAME), tableEntityInfo(EC_KEY_ENTITY_PROPERTIES))
+    codeEntitiesClass = GetEntitesCode(tableEntityInfo(EC_KEY_ENTITIES_CLASS_NAME), tableEntityInfo(EC_KEY_ENTITY_CLASS_NAME))
     
     If isExportFiles_ Then
         ' option1 using write file and import file. to using attribute key word in class module.
-        AddClassModuleFromFile tableEntityInfo("EntityClassName"), codeEntityClass
-        AddClassModuleFromFile tableEntityInfo("EntitiesClassName"), codeEntitiesClass
+        AddClassModuleFromFile tableEntityInfo(EC_KEY_ENTITY_CLASS_NAME), codeEntityClass
+        AddClassModuleFromFile tableEntityInfo(EC_KEY_ENTITIES_CLASS_NAME), codeEntitiesClass
         
     Else
         ' option2 using CodeModule.Insertlines()
@@ -433,7 +545,7 @@ End Function
 
 Private Function AddClassModuleFromFile(className, codes)
     Dim classFilePath As String
-    classFilePath = ThisWorkbook.path & "\" & className & ".cls"
+    classFilePath = ThisWorkbook.Path & "\" & className & ".cls"
     CreateClassModuleFile classFilePath, codes
     ImportClassModuleFile classFilePath, className
     DeleteClassModuleFile classFilePath
@@ -493,7 +605,6 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
     Dim info As Collection, prop As Collection
     Const DB_TABLE_NAME As String = "DBTableName"
     
-    
     With texts
         If isExportFiles_ Then
             .Add "VERSION 1.0 CLASS"
@@ -543,27 +654,27 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add ""
         For Each info In infos
             .Add "    Set info = New Collection"
-            .Add "    Call info.Add(""" & info("DBTableName") & """, ""DBTableName"")"
-            .Add "    Call info.Add(""" & info("EntityClassName") & """, ""EntityClassName"")"
-            .Add "    Call info.Add(""" & info("EntitiesClassName") & """, ""EntitiesClassName"")"
-            .Add "    Call info.Add(""" & info("PrimaryKey") & """, ""PrimaryKey"")"
+            .Add "    Call info.Add(""" & info(EC_KEY_ENTITY_DB_TABLE).Name & """, """ & EC_KEY_ENTITY_DB_TABLE & """)"
+            .Add "    Call info.Add(""" & info(EC_KEY_ENTITY_CLASS_NAME) & """, """ & EC_KEY_ENTITY_CLASS_NAME & """)"
+            .Add "    Call info.Add(""" & info(EC_KEY_ENTITIES_CLASS_NAME) & """, """ & EC_KEY_ENTITIES_CLASS_NAME & """)"
+            .Add "    Call info.Add(""" & info(EC_KEY_ENTITY_DB_TABLE).Keys(0).Columns(0).Name & """, ""PrimaryKey"")"
             .Add ""
             .Add "    Set props = New Collection"
             For Each prop In info("Properties")
-                If prop("IsLet") Then
+                If prop(EC_KEY_ENTITY_IS_PROPERTY_RELATED) = False Then
                     .Add "    Set prop = New Collection"
-                    .Add "    Call prop.Add(""" & prop("PropertyName") & """, ""PropertyName"")"
-                    .Add "    Call prop.Add(""" & prop("ClassFieldName") & """, ""ClassFieldName"")"
-                    .Add "    Call prop.Add(""" & prop("PropertyType") & """, ""PropertyType"")"
-                    .Add "    Call prop.Add(""" & prop("DbFieldName") & """, ""DbFieldName"")"
-                    .Add "    Call prop.Add(""" & prop("ForeignKey") & """, ""ForeignKey"")"
-                    .Add "    Call prop.Add(" & prop("Autoincrement") & ", ""Autoincrement"")"
+                    .Add "    Call prop.Add(""" & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """, """ & EC_KEY_ENTITY_PROPERTY_NAME & """)"
+                    .Add "    Call prop.Add(""" & prop(EC_KEY_ENTITY_FIELD_NAME) & """, """ & EC_KEY_ENTITY_FIELD_NAME & """)"
+                    .Add "    Call prop.Add(""" & prop(EC_KEY_ENTITY_PROPERTY_TYPE) & """, """ & EC_KEY_ENTITY_PROPERTY_TYPE & """)"
+                    .Add "    Call prop.Add(""" & prop(EC_KEY_ENTITY_DB_COLUMN).Name & """, ""DbFieldName"")"
+'                    .Add "    Call prop.Add(""" & prop("ForeignKey") & """, ""ForeignKey"")"
+                    .Add "    Call prop.Add(""" & prop(EC_KEY_ENTITY_DB_COLUMN).Properties("Autoincrement") & """, ""Autoincrement"")"
                     '.Add "    Call prop.Add(""" & prop(4) & """, ""PrimaryKey"")"
-                    .Add "    Call props.Add(prop, """ & prop("PropertyName") & """)"
+                    .Add "    Call props.Add(prop, """ & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """)"
                 End If
             Next
-            .Add "    Call info.Add(props, ""Properties"")"
-            .Add "    Call infos.Add(info, """ & info("DBTableName") & """)"
+            .Add "    Call info.Add(props, """ & EC_KEY_ENTITY_PROPERTIES & """)"
+            .Add "    Call infos.Add(info, """ & info(EC_KEY_ENTITY_DB_TABLE).Name & """)"
             .Add ""
             .Add ""
         Next
@@ -644,27 +755,27 @@ Private Function GetEntityCode(entityName As String, propertyInfo As Collection)
         .Add "Option Explicit"
         .Add ""
         For Each pInfo In propertyInfo
-            If pInfo(ecPropertyIsLet) Then
-                .Add "Private " & pInfo(ecFieldName) & " as " & pInfo(ecPropertyType)
+            If pInfo(EC_KEY_ENTITY_IS_PROPERTY_RELATED) = False Then
+                .Add "Private " & pInfo(EC_KEY_ENTITY_FIELD_NAME) & " as " & pInfo(EC_KEY_ENTITY_PROPERTY_TYPE)
             Else
-                .Add "Private " & pInfo(ecFieldName) & " as New " & pInfo(ecPropertyType)
+                .Add "Private " & pInfo(EC_KEY_ENTITY_FIELD_NAME) & " as New " & pInfo(EC_KEY_ENTITY_PROPERTY_TYPE)
             End If
         Next
         .Add ""
         For Each pInfo In propertyInfo
-            If pInfo(ecPropertyIsLet) Then
-                .Add "Public Property Get " & pInfo(ecPropertyName) & "() as " & pInfo(ecPropertyType)
-                .Add "    Let " & pInfo(ecPropertyName) & " = " & pInfo(ecFieldName)
+            If pInfo(EC_KEY_ENTITY_IS_PROPERTY_RELATED) = False Then
+                .Add "Public Property Get " & pInfo(EC_KEY_ENTITY_PROPERTY_NAME) & "() as " & pInfo(EC_KEY_ENTITY_PROPERTY_TYPE)
+                .Add "    Let " & pInfo(EC_KEY_ENTITY_PROPERTY_NAME) & " = " & pInfo(EC_KEY_ENTITY_FIELD_NAME)
                 .Add "End Property"
-                .Add "Public Property Let " & pInfo(ecPropertyName) & "(val as " & pInfo(ecPropertyType) & ")"
-                .Add "    Let " & pInfo(ecFieldName) & " = val"
+                .Add "Public Property Let " & pInfo(EC_KEY_ENTITY_PROPERTY_NAME) & "(val as " & pInfo(EC_KEY_ENTITY_PROPERTY_TYPE) & ")"
+                .Add "    Let " & pInfo(EC_KEY_ENTITY_FIELD_NAME) & " = val"
                 .Add "End Property"
             Else
-                .Add "Public Property Get " & pInfo(ecPropertyName) & "() as " & pInfo(ecPropertyType)
-                .Add "    Set " & pInfo(ecPropertyName) & " = " & pInfo(ecFieldName)
+                .Add "Public Property Get " & pInfo(EC_KEY_ENTITY_PROPERTY_NAME) & "() as " & pInfo(EC_KEY_ENTITY_PROPERTY_TYPE)
+                .Add "    Set " & pInfo(EC_KEY_ENTITY_PROPERTY_NAME) & " = " & pInfo(EC_KEY_ENTITY_FIELD_NAME)
                 .Add "End Property"
-                .Add "Public Property Set " & pInfo(ecPropertyName) & "(val as " & pInfo(ecPropertyType) & ")"
-                .Add "    Set " & pInfo(ecFieldName) & " = val"
+                .Add "Public Property Set " & pInfo(EC_KEY_ENTITY_PROPERTY_NAME) & "(val as " & pInfo(EC_KEY_ENTITY_PROPERTY_TYPE) & ")"
+                .Add "    Set " & pInfo(EC_KEY_ENTITY_FIELD_NAME) & " = val"
                 .Add "End Property"
             End If
         Next
@@ -679,28 +790,6 @@ Private Function GetEntityCode(entityName As String, propertyInfo As Collection)
     GetEntityCode = str
 End Function
 
-Private Function GetPropertyInfoAsTable(col As ADOX.Column)
-    Dim fieldName As String, fieldType As ADODB.DataTypeEnum, actualValue As Variant
-    Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
-        
-    propertyName = ConvertDbFieldNameToClassPropertyName(col.Name)
-    propertyFieldName = ConvertDBFieldNameToClassFieldName(col.Name)
-    propertyTypeName = GetEntityPropertyTypeBy(col.Type)
-        
-    Dim prop As New Collection
-    Call prop.Add(propertyName, "PropertyName")
-    Call prop.Add(propertyFieldName, "ClassFieldName")
-    Call prop.Add(propertyTypeName, "PropertyType")
-    Call prop.Add(True, "IsLet")
-    Call prop.Add(col.Name, "DbFieldName")
-    Call prop.Add("", "ForeignKey")
-    Call prop.Add("", "PrimaryKey")
-    If IsNull(GetPropertyByName(col.Properties, "Autoincrement")) = False Then _
-        Call prop.Add(GetPropertyByName(col.Properties, "Autoincrement").Value, "Autoincrement")
-    Set GetPropertyInfoAsTable = prop
-    
-End Function
-
 Private Function GetPropertyByName(props As ADOX.Properties, property_name As String) As Variant
     Dim prop As ADOX.Property
     
@@ -712,12 +801,13 @@ Private Function GetPropertyByName(props As ADOX.Properties, property_name As St
 End Function
 
 
-Private Function GetEntityPropertyTypeBy(fieldType As ADODB.DataTypeEnum) As String
-    Dim propertyTypeName As String
-
-
-    If fieldType = adInteger Then
-        propertyTypeName = "Integer"
+Private Function GetEntityPropertyTypeBy(col As ADOX.Column) As String
+    Dim propertyTypeName As String, fieldType As ADODB.DataTypeEnum
+    
+    fieldType = col.Type
+    If col.Attributes = adColNullable Then
+        propertyTypeName = "Variant"
+    ElseIf fieldType = adInteger Then propertyTypeName = "Integer"
     ElseIf fieldType = adSingle Then propertyTypeName = "Single"
     ElseIf fieldType = adDouble Then propertyTypeName = "Double"
     ElseIf fieldType = adCurrency Then propertyTypeName = "Currency"
@@ -746,25 +836,6 @@ End Function
 
 
 
-Private Function GetPropertyInfoAsRelatedTable1toN(keyTable, keyfield, relatedfieldName)
-    Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
-                
-    propertyName = ConvertDbTableNameToEntitesClassName(CStr(keyTable))
-    propertyFieldName = ConvertDbTableNameToEntitiesClassFieldName(CStr(keyTable))
-    propertyTypeName = propertyName
-    
-    Set GetPropertyInfoAsRelatedTable1toN = GetPropertyInfo(propertyFieldName, propertyName, propertyTypeName, False, keyfield, relatedfieldName)
-End Function
-
-Private Function GetPropertyInfoAsRelatedTableNto1(keyTable, keyfield, relatedfieldName)
-    Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
-                
-    propertyName = ConvertDbTableNameToEntityClassName(CStr(keyTable))
-    propertyFieldName = ConvertDBFieldNameToClassFieldName(CStr(keyTable))
-    propertyTypeName = propertyName
-    
-    Set GetPropertyInfoAsRelatedTableNto1 = GetPropertyInfo(propertyFieldName, propertyName, propertyTypeName, False, keyfield, relatedfieldName)
-End Function
 
 Private Function GetPropertyInfo(propertyFieldName, propertyName, propertyTypeName, isLet, fieldName, relatedfieldName)
     Dim arr, prop As New Collection

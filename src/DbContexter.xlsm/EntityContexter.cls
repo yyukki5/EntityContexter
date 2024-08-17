@@ -226,8 +226,7 @@ Public Function FetchRecords(qry As String, entity_name As String, DbInfo As Obj
                 
                 Set tbl = catalog_.Tables(table_name)
                 Set ky = tbl.Keys(ky_name)
-                ' todo select by relatedcolumn = fky
-                kycol = tbl.Keys(ky_name).Columns(0).Name
+                kycol = SelectColumnByRelatecColumn(tbl.Keys(ky_name).Columns, (fkey)).Name
                 kyfld = rs.Fields(kycol).Value
                 
                 qry1 = "SELECT * FROM [" & ent_name & "] WHERE " & fkey & " = " & kyfld
@@ -269,6 +268,13 @@ Public Function FetchRecords(qry As String, entity_name As String, DbInfo As Obj
     rs.Close
     
     Set FetchRecords = Items
+End Function
+
+Private Function SelectColumnByRelatecColumn(cols As ADOX.Columns, related_column As String) As ADOX.Column
+    Dim col As ADOX.Column
+    For Each col In cols
+        If col.RelatedColumn = related_column Then Set SelectColumnByRelatecColumn = col: Exit Function
+    Next
 End Function
 
 Private Function GetPropertyNameByFieldName(props As Collection, field_name As String)

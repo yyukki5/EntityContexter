@@ -10,7 +10,7 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' Entity Contexer -----------------------------------------------------------------
-' Version   : 0.2.0
+' Version   : 0.3.0
 ' Project   : https://github.com/yyukki5/EntityContexter
 ' Depend on : Microsoft ActiveX Data Objects X.X Library, Microsoft ADO Ext. 2.8 for DDL and Security
 ' Before Using : Need to check "Trust access to the VBA project object model"
@@ -580,11 +580,7 @@ End Function
 
 Private Function GetPropertyInfoByInverseProperty(key_table_name As String, col As ADOX.Column)
     Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
-                
-'    propertyName = ConvertDbTableNameToEntityClassName(key_table_name)
-'    propertyFieldName = ConvertDbTableNameToEntitiesClassFieldName(key_table_name)
-'    propertyTypeName = ConvertDbTableNameToEntitesClassName(key_table_name)
-    
+
     propertyName = ConvertDbTableNameToEntitesClassName(key_table_name)
     propertyFieldName = ConvertDbTableNameToEntitiesClassFieldName(key_table_name)
     propertyTypeName = propertyName

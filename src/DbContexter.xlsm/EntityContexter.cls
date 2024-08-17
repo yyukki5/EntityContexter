@@ -111,35 +111,6 @@ Public Function Initialize(connectionString As String) As EntityContexter
     Set Initialize = Me
 End Function
 
-'Public Function SetRelationShip1toN(primaryKey As Object, primaryKeyPropertyName As String, foreignKey As Object, foreignKeyPropertyName As String)
-'    Dim primaryKeyObject As Object, foreignKeyObject As Object
-'
-'    For Each primaryKeyObject In primaryKey.Items
-'        For Each foreignKeyObject In foreignKey.Items
-'            If CallByName(foreignKeyObject, foreignKeyPropertyName, VbGet) = CallByName(primaryKeyObject, primaryKeyPropertyName, VbGet) Then
-'                CallByName(primaryKeyObject, TypeName(foreignKey), VbGet).Add foreignKeyObject
-'                Call CallByName(foreignKeyObject, TypeName(primaryKeyObject), VbSet, primaryKeyObject)
-'            End If
-'        Next
-'    Next
-'
-'End Function
-'
-'Public Function SetRelationShipNto1(primaryKey As Object, primaryKeyPropertyName As String, foreignKey As Object, foreignKeyPropertyName As String)
-'    Dim primaryKeyObject As Object, foreignKeyObject As Object
-'
-'    For Each primaryKeyObject In primaryKey.Items
-'        For Each foreignKeyObject In foreignKey.Items
-'            If CallByName(foreignKeyObject, foreignKeyPropertyName, VbGet) = CallByName(primaryKeyObject, primaryKeyPropertyName, VbGet) Then
-'                Call CallByName(primaryKeyObject, TypeName(foreignKey.Item(1)), VbSet, foreignKeyObject)
-'                Call CallByName(foreignKeyObject, TypeName(primaryKey), VbSet, primaryKey)
-'            End If
-'        Next
-'    Next
-'End Function
-
-
-
 Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, _
                                  Optional schema_name As String, _
                                  Optional dbcontext_name As String = "DbContext" _
@@ -300,70 +271,12 @@ Public Function FetchRecords(qry As String, entity_name As String, DbInfo As Obj
     Set FetchRecords = Items
 End Function
 
-'Public Function FetchRecords(entity_name As String, DbInfo As Object, dbc As Object) As Collection
-'    Dim rs As Recordset, Items As New Collection, field As ADODB.field, propertyName As String, T As Object
-'    Dim table_name As String, props As Collection, prop As Collection, field_value
-'
-'    table_name = DbInfo(entity_name)(EC_KEY_DB_TABLE_NAME)
-'    Set props = DbInfo(entity_name)(EC_KEY_ENTITY_PROPERTIES)
-'
-'    Set rs = FetchRecordSet(table_name)
-'    rs.MoveFirst
-'    Do Until rs.EOF
-'        Set T = dbc.CreateObjectBy(entity_name)
-'
-''        For Each field In rs.Fields
-'        For Each prop In props
-'
-'            ' todo add case of related values
-'            If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Then
-'                Dim fkey
-'                fkey = prop(EC_KEY_ENTITY_FOREIGNKEY)
-'
-'                set tbls = FetchRecords(... , DBInfo, dbc)
-'                Call CallByName(T, propertyName, VbLet, tbls)
-'            Else
-'                propertyName = prop(EC_KEY_ENTITY_PROPERTY_NAME)
-'                Call CallByName(T, propertyName, VbLet, rs.Fields(prop(EC_KEY_DB_FIELD_NAME)).Value)
-'            End If
-'        Next
-'        Items.Add T
-'        rs.MoveNext
-'    Loop
-'    rs.Close
-'
-'    Set FetchRecords = Items
-'End Function
-
-
 Private Function GetPropertyNameByFieldName(props As Collection, field_name As String)
     Dim prop As Collection
     For Each prop In props
         If prop(EC_KEY_DB_FIELD_NAME) = field_name Then GetPropertyNameByFieldName = prop(EC_KEY_ENTITY_PROPERTY_NAME)
     Next
 End Function
-
-'Public Function FetchRecords(table_name As String, T As Object) As Collection
-'    Dim rs As Recordset, Items As New Collection, field As ADODB.field, propertyName As String
-'
-'    Set rs = FetchRecordSet(table_name)
-'    rs.MoveFirst
-'    Do Until rs.EOF
-'        For Each field In rs.Fields
-'            propertyName = ConvertDbFieldNameToClassPropertyName(field.Name)
-'            If IsNull(field.Value) Then
-'                Call CallByName(T, propertyName, VbLet, 0)
-'            Else
-'                Call CallByName(T, propertyName, VbLet, field.Value)
-'            End If
-'        Next
-'        Items.Add T
-'        rs.MoveNext
-'    Loop
-'    rs.Close
-'
-'    Set FetchRecords = Items
-'End Function
 
 Public Function Insert(rec As Object, DbInfo As Object)
     Dim rs As New ADODB.Recordset, fl, vl

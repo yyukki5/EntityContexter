@@ -71,6 +71,8 @@ Private catalog_ As ADOX.catalog
 Private isExportFiles_ As Boolean
 Private schemaName_ As String
 Private connectionString_ As String
+Private fetchQuery_ As String
+
 
 Public Enum PropertyInfoIndex
     [_Init]
@@ -197,7 +199,35 @@ Public Function CreateDbInfoPropertyBy(Optional property_name, _
 End Function
 
 
-Public Function FetchRecords(qry As String, entity_name As String, DbInfo As Object, dbc As Object, cnt As Long)
+Public Function SetQueryDbSet(db_info, entity_name) As String
+    fetchQuery_ = db_info(entity_name)(EC_KEY_DB_TABLE_NAME)
+End Function
+
+Public Function SetQueryOrderBy(db_info, property_name As String, Optional entity_name As String) As String
+    If entity_name = "" Then
+        fetchQuery_ = "select * from (" & fetchQuery_ & ") order by " & db_info(entity_name)(EC_KEY_ENTITY_PROPERTIES)(property_name)(EC_KEY_DB_FIELD_NAME) & " asc"
+    Else
+        fetchQuery_ = "select * from (" & fetchQuery_ & ") order by " & db_info(entity_name)(EC_KEY_DB_TABLE_NAME) & "." & db_info(entity_name)(EC_KEY_ENTITY_PROPERTIES)(property_name)(EC_KEY_DB_FIELD_NAME) & " asc"
+    End If
+End Function
+
+Public Function SetQueryInclude(db_info As Variant, entity_name, related_entity_name) As String
+    Dim table_name As String, foregin_table_name As String, key_name As String, foregin_key_name As String
+    
+    table_name = db_info(entity_name)(EC_KEY_DB_TABLE_NAME)
+    foregin_table_name = db_info(related_entity_name)(EC_KEY_DB_TABLE_NAME)
+    key_name = db_info(entity_name)("Properties")(related_entity_name)(EC_KEY_DB_FIELD_NAME)
+    foregin_key_name = db_info(entity_name)("Properties")(related_entity_name)(EC_KEY_ENTITY_FOREIGNKEY)
+    
+    fetchQuery_ = "(" & fetchQuery_ & ") left outer join " & foregin_table_name & " on " & table_name & "." & key_name & " = " & foregin_table_name & "." & foregin_key_name
+End Function
+
+Public Function SetQueryToList()
+    fetchQuery_ = "SELECT * FROM (" & fetchQuery_ & ")"
+End Function
+
+
+Public Function FetchRecords(entity_name As String, DbInfo As Object, dbc As Object, cnt As Long)
     Dim rs As Recordset, Items As New Collection, field As ADODB.field, propertyName As String, T As Object
     Dim table_name As String, props As Collection, prop As Collection, field_value
     Dim tbl As ADOX.Table, col As ADOX.Column
@@ -208,7 +238,10 @@ Public Function FetchRecords(qry As String, entity_name As String, DbInfo As Obj
         
     table_name = DbInfo(entity_name)(EC_KEY_DB_TABLE_NAME)
     Set props = DbInfo(entity_name)(EC_KEY_ENTITY_PROPERTIES)
-    Set rs = FetchRecordSetByQuery(qry)
+    Set rs = FetchRecordSetByQuery(fetchQuery_)
+    
+    Dim table_names As Dictionary
+    Set table_names = GetBaseTableNamesBy(rs)
     
     If rs.BOF And rs.EOF Then Set FetchRecords = Nothing:     Exit Function
     rs.MoveFirst
@@ -230,7 +263,7 @@ Public Function FetchRecords(qry As String, entity_name As String, DbInfo As Obj
                 kyfld = rs.Fields(kycol).Value
                 
                 qry1 = "SELECT * FROM [" & ent_name & "] WHERE " & fkey & " = " & kyfld
-                Set tbls = FetchRecords((qry1), (ent_name), DbInfo, dbc, cnt + 1)
+                Set tbls = FetchRecords((ent_name), DbInfo, dbc, cnt + 1)
                 propertyName = prop(EC_KEY_ENTITY_PROPERTY_NAME)
                 
                 If tbls Is Nothing Then
@@ -249,7 +282,7 @@ Public Function FetchRecords(qry As String, entity_name As String, DbInfo As Obj
                 kyfld = rs.Fields(tbl.Keys(ky_name).Columns(fkey).RelatedColumn).Value
                 
                 qry1 = "SELECT * FROM [" & ent_name & "] WHERE " & fkey & " = " & kyfld
-                Set tbls = FetchRecords((qry1), (ent_name), DbInfo, dbc, cnt + 1)
+                Set tbls = FetchRecords((ent_name), DbInfo, dbc, cnt + 1)
                 propertyName = prop(EC_KEY_ENTITY_PROPERTY_NAME)
                     
                 If tbls Is Nothing Then
@@ -259,7 +292,7 @@ Public Function FetchRecords(qry As String, entity_name As String, DbInfo As Obj
             
             Else
                 propertyName = prop(EC_KEY_ENTITY_PROPERTY_NAME)
-                Call CallByName(T, propertyName, VbLet, rs.Fields(prop(EC_KEY_DB_FIELD_NAME)).Value)
+                Call CallByName(T, propertyName, VbLet, GetValueBy(rs, table_name, prop(EC_KEY_DB_FIELD_NAME)))
             End If
         Next
         Items.Add T
@@ -269,6 +302,28 @@ Public Function FetchRecords(qry As String, entity_name As String, DbInfo As Obj
     
     Set FetchRecords = Items
 End Function
+
+Private Function GetValueBy(rs As ADODB.Recordset, table_name As String, field_name As String)
+    Dim f As ADODB.field, prop As ADOX.Property
+    
+    For Each f In rs.Fields
+        If f.Properties("BASECOLUMNNAME") = field_name And f.Properties("BASETABLENAME") = table_name Then
+              GetValueBy = f.Value
+        End If
+    Next
+End Function
+
+Private Function GetBaseTableNamesBy(rs As ADODB.Recordset) As Dictionary
+    Dim dic As New Dictionary, f As ADODB.field, tbl As String
+    
+    For Each f In rs.Fields
+        tbl = f.Properties("BASETABLENAME")
+        If dic.Exists(tbl) = False Then Call dic.Add(tbl, tbl)
+    Next
+    
+    Set GetBaseTableNamesBy = dic
+End Function
+
 
 Private Function SelectColumnByRelatecColumn(cols As ADOX.Columns, related_column As String) As ADOX.Column
     Dim col As ADOX.Column
@@ -570,6 +625,7 @@ Private Function GetPropertyInfoByForeignKey(key_table_name As String, col As AD
     Call prop.Add(propertyTypeName, EC_KEY_ENTITY_PROPERTY_TYPE)
     Call prop.Add(True, EC_KEY_ENTITY_IS_PROPERTY_RELATED)
     Call prop.Add(col, EC_KEY_ENTITY_DB_COLUMN)
+    Call prop.Add(col.Name, EC_KEY_DB_FIELD_NAME)
     Call prop.Add(col.RelatedColumn, EC_KEY_ENTITY_FOREIGNKEY)
     Call prop.Add(key_table_name, EC_KEY_ENTITY_FOREIGN_TABLE)
     Call prop.Add("", EC_KEY_ENTITY_INVERSE_FOREIGNKEY)
@@ -590,6 +646,7 @@ Private Function GetPropertyInfoByInverseProperty(key_table_name As String, col 
     Call prop.Add(propertyFieldName, EC_KEY_ENTITY_FIELD_NAME)
     Call prop.Add(propertyTypeName, EC_KEY_ENTITY_PROPERTY_TYPE)
     Call prop.Add(True, EC_KEY_ENTITY_IS_PROPERTY_RELATED)
+    Call prop.Add(col.RelatedColumn, EC_KEY_DB_FIELD_NAME)
     Call prop.Add("", EC_KEY_ENTITY_FOREIGNKEY)
     Call prop.Add("", EC_KEY_ENTITY_FOREIGN_TABLE)
     Call prop.Add(col.Name, EC_KEY_ENTITY_INVERSE_FOREIGNKEY)
@@ -715,7 +772,7 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add "Option Explicit"
         .Add ""
         .Add "Private ec_ As EntityContexter"
-        .Add "Private query_ As String"
+        .Add "Private entity_name_ As String"
         .Add ""
         .Add "Private Sub Class_Initialize()"
         .Add "    Set ec_ = New EntityContexter"
@@ -727,12 +784,24 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add ""
         .Add "End Function"
         .Add ""
-        .Add "Public Function Fetch(entity_name As String)"
         .Add ""
-        .Add "    query_ = ""SELECT * FROM ["" & DbInfo(entity_name)(""DBTableName"") & ""]"" "
-        .Add "    Set Fetch = ec_.FetchRecords(query_, entity_name, DbInfo, Me, 0)"
-        .Add ""
+        .Add "Public Function DbSet(entity_name As String) As " & dbc_name
+        .Add "        Call ec_.SetQueryDbSet(DbInfo, entity_name):    entity_name_ = entity_name:     Set DbSet = Me"
         .Add "End Function"
+        .Add ""
+        .Add "Public Function Include(entity_name As String) As " & dbc_name
+        .Add "    Call ec_.SetQueryInclude(DbInfo, entity_name_, entity_name):     Set Include = Me"
+        .Add "End Function"
+        .Add ""
+        .Add "Public Function OrderBy(property_name As String, Optional entity_name As String) As " & dbc_name
+        .Add "    Call ec_.SetQueryOrderBy(DbInfo, property_name, entity_name):   Set OrderBy = Me"
+        .Add "End Function"
+        .Add ""
+        .Add "Public Function ToList() As Variant"
+        .Add "    Call ec_.SetQueryToList"
+        .Add "    Set ToList = ec_.FetchRecords(entity_name_, DbInfo, Me, 0)"
+        .Add "End Function"
+        .Add ""
         .Add ""
         .Add "Public Function Insert(rec As Object)"
         .Add ""
@@ -756,10 +825,6 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add "    Dim infos As New Collection, info As Collection, props As Collection, prop As Collection"
         .Add ""
         For Each info In infos
-'            .Add "    Set info = New Collection"
-'            .Add "    Call info.Add(""" & info(EC_KEY_DB_TABLE_NAME) & """, """ & EC_KEY_DB_TABLE_NAME & """)"
-'            .Add "    Call info.Add(""" & info(EC_KEY_ENTITY_NAME) & """, """ & EC_KEY_ENTITY_NAME & """)"
-'            .Add "    Call info.Add(""" & info(EC_KEY_ENTITIES_NAME) & """, """ & EC_KEY_ENTITIES_NAME & """)"
             .Add "    Set info = ec_.CreateDbInfoBy(" & _
                         "  table_name   :=""" & info(EC_KEY_DB_TABLE_NAME) & """" & _
                         ", entity_name  :=""" & info(EC_KEY_ENTITY_NAME) & """" & _
@@ -770,13 +835,6 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
             .Add "    Set props = New Collection"
             For Each prop In info("Properties")
                 If prop(EC_KEY_ENTITY_IS_PROPERTY_RELATED) = False Then
-'                    .Add "    Set prop = New Collection"
-'                    .Add "    Call prop.Add(""" & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """, """ & EC_KEY_ENTITY_PROPERTY_NAME & """)"
-'                    .Add "    Call prop.Add(""" & prop(EC_KEY_ENTITY_FIELD_NAME) & """, """ & EC_KEY_ENTITY_FIELD_NAME & """)"
-'                    .Add "    Call prop.Add(""" & prop(EC_KEY_ENTITY_PROPERTY_TYPE) & """, """ & EC_KEY_ENTITY_PROPERTY_TYPE & """)"
-'                    .Add "    Call prop.Add(""" & prop(EC_KEY_ENTITY_DB_COLUMN).Name & """, """ & EC_KEY_DB_FIELD_NAME & """)"
-'                    .Add "    Call prop.Add(""" & prop(EC_KEY_ENTITY_DB_COLUMN).Properties(EC_KEY_DB_AUTOINCREMENT) & """, """ & EC_KEY_DB_AUTOINCREMENT & """)"
-                    
                     .Add "    Set prop = ec_.CreateDbInfoPropertyBy(" & _
                                     "property_name:=""" & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """" & _
                                     ", entity_field_name:=""" & prop(EC_KEY_ENTITY_FIELD_NAME) & """" & _
@@ -786,21 +844,17 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
                                     ")"
                     .Add "    Call props.Add(prop, """ & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """)"
                 Else
-'                    .Add "    Set prop = ec_.CreateDbInfoPropertyBy(" & _
-'                                    "property_name:=""" & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """" & _
-'                                    ", entity_field_name:=""" & prop(EC_KEY_ENTITY_FIELD_NAME) & """" & _
-'                                    ", entity_property_type:=""" & prop(EC_KEY_ENTITY_PROPERTY_TYPE) & """" & _
-'                                    ", foreign_key:=""" & prop(EC_KEY_ENTITY_FOREIGNKEY) & """" & _
-'                                    ")"
                     If prop(EC_KEY_ENTITY_FOREIGNKEY) <> "" Then
                         .Add "    Set prop = ec_.CreateDbInfoPropertyBy(" & _
                                         "property_name:=""" & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """" & _
+                                        ", db_field_name:=""" & prop(EC_KEY_DB_FIELD_NAME) & """" & _
                                         ", foreign_key:=""" & prop(EC_KEY_ENTITY_FOREIGNKEY) & """" & _
                                         ", foreign_table:=""" & prop(EC_KEY_ENTITY_FOREIGN_TABLE) & """" & _
                                         ")"
                     Else
                         .Add "    Set prop = ec_.CreateDbInfoPropertyBy(" & _
                                         "property_name:=""" & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """" & _
+                                        ", db_field_name:=""" & prop(EC_KEY_DB_FIELD_NAME) & """" & _
                                         ", inverse_foreign_key:=""" & prop(EC_KEY_ENTITY_INVERSE_FOREIGNKEY) & """" & _
                                         ", inverse_foreign_table:=""" & prop(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE) & """" & _
                                         ")"
@@ -1001,11 +1055,11 @@ End Function
 
 
 Private Function ConvertDbTableNameToEntitesClassName(dbTbleName As String) As String
-    ConvertDbTableNameToEntitesClassName = GetEstimatedPluralName(ConvertSnakeToPascalCase(dbTbleName))
+    ConvertDbTableNameToEntitesClassName = Replace(GetEstimatedPluralName(ConvertSnakeToPascalCase(dbTbleName)), "#csv", "")
 End Function
 
 Private Function ConvertDbTableNameToEntityClassName(dbTbleName As String) As String
-    ConvertDbTableNameToEntityClassName = GetEstimatedSingularName(ConvertSnakeToPascalCase(dbTbleName))
+    ConvertDbTableNameToEntityClassName = Replace(GetEstimatedSingularName(ConvertSnakeToPascalCase(dbTbleName)), "#csv", "")
 End Function
 
 Private Function ConvertDbTableNameToEntitiesClassFieldName(dbTbleName As String) As String

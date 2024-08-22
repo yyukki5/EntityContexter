@@ -232,89 +232,11 @@ Public Function SetQueryToList()
     fetchQuery_ = "SELECT * FROM (" & fetchQuery_ & ")"
 End Function
 
-
-Public Function FetchRecords(entity_name As String, DbInfo As Object, dbc As Object, cnt As Long)
-    Dim rs As Recordset, Items As New Collection, field As ADODB.field, propertyName As String, T As Object
-    Dim table_name As String, props As Collection, prop As Collection, field_value
-    Dim tbl As ADOX.Table, col As ADOX.Column
-    
-    Dim fkey, ent_name, qry1, tbls As Collection, kyfld, ky_name, kycol, ky As Key, T1, T2
-        
-    If cnt > LOOP_MAX Then Set FetchRecords = Nothing:     Exit Function
-        
-    table_name = DbInfo(entity_name)(EC_KEY_DB_TABLE_NAME)
-    Set props = DbInfo(entity_name)(EC_KEY_ENTITY_PROPERTIES)
-    Set rs = FetchRecordSetByQuery(fetchQuery_)
-    
-    Dim table_names As Dictionary
-    Set table_names = GetBaseTableNamesBy(rs)
-    
-    If rs.BOF And rs.EOF Then Set FetchRecords = Nothing:     Exit Function
-    rs.MoveFirst
-    Do Until rs.EOF
-        Set T = dbc.CreateObjectBy(entity_name)
-        
-'        For Each field In rs.Fields
-        For Each prop In props
-            
-            If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Then
-                
-                fkey = prop(EC_KEY_ENTITY_FOREIGNKEY)
-                ent_name = prop(EC_KEY_ENTITY_FOREIGN_TABLE)
-                ky_name = ent_name & table_name
-                
-                Set tbl = catalog_.Tables(table_name)
-                Set ky = tbl.Keys(ky_name)
-                kycol = SelectColumnByRelatecColumn(tbl.Keys(ky_name).Columns, (fkey)).Name
-                kyfld = rs.Fields(kycol).Value
-                
-                qry1 = "SELECT * FROM [" & ent_name & "] WHERE " & fkey & " = " & kyfld
-                Set tbls = FetchRecords((ent_name), DbInfo, dbc, cnt + 1)
-                propertyName = prop(EC_KEY_ENTITY_PROPERTY_NAME)
-                
-                If tbls Is Nothing Then
-                Else
-                    Call CallByName(T, propertyName, VbSet, tbls.Item(1))
-                End If
-            
-            ElseIf prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
-                
-                fkey = prop(EC_KEY_ENTITY_INVERSE_FOREIGNKEY)
-                ent_name = prop(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE)
-                ky_name = table_name & ent_name
-                
-                Set tbl = catalog_.Tables(ent_name)
-                kycol = tbl.Keys(ky_name).Columns(fkey).Name
-                kyfld = rs.Fields(tbl.Keys(ky_name).Columns(fkey).RelatedColumn).Value
-                
-                qry1 = "SELECT * FROM [" & ent_name & "] WHERE " & fkey & " = " & kyfld
-                Set tbls = FetchRecords((ent_name), DbInfo, dbc, cnt + 1)
-                propertyName = prop(EC_KEY_ENTITY_PROPERTY_NAME)
-                    
-                If tbls Is Nothing Then
-                Else
-                    Call CallByName(CallByName(T, propertyName, VbGet), "Items", VbSet, tbls)
-                End If
-            
-            Else
-                propertyName = prop(EC_KEY_ENTITY_PROPERTY_NAME)
-                Call CallByName(T, propertyName, VbLet, GetValueBy(rs, table_name, prop(EC_KEY_DB_FIELD_NAME)))
-            End If
-        Next
-        Items.Add T
-        rs.MoveNext
-    Loop
-    rs.Close
-    
-    Set FetchRecords = Items
-End Function
-
-
-Public Function FetchRecords2(base_entity_name As String, db_infos As Object, dbc As Object, cnt As Long)
+Public Function FetchRecords(base_entity_name As String, db_infos As Object, dbc As Object, cnt As Long) As Collection
     Dim rs As Recordset
                 
     Set rs = FetchRecordSetByQuery(fetchQuery_)
-    Set FetchRecords2 = GetEntityFromRecordSetBy(db_infos, dbc, cnt, rs, base_entity_name)
+    Set FetchRecords = GetEntityFromRecordSetBy(db_infos, dbc, cnt, rs, base_entity_name)
     rs.Close
     
 End Function
@@ -365,43 +287,6 @@ Private Function GetEntityFromFieldsBy(db_infos As Object, dbc As Object, cnt As
     Next
     
     Set GetEntityFromFieldsBy = IIf(exist_values, T, Nothing)
-End Function
-
-Private Function GetValueBy(rs As ADODB.Recordset, table_name As String, field_name As String)
-    Dim f As ADODB.field, prop As ADOX.Property
-    
-    For Each f In rs.Fields
-    
-        If f.Properties("BASECOLUMNNAME") = field_name And f.Properties("BASETABLENAME") = table_name Then
-              GetValueBy = f.Value
-        End If
-    Next
-End Function
-
-Private Function GetBaseTableNamesBy(rs As ADODB.Recordset) As Dictionary
-    Dim dic As New Dictionary, f As ADODB.field, tbl As String
-    
-    For Each f In rs.Fields
-        tbl = f.Properties("BASETABLENAME")
-        If dic.Exists(tbl) = False Then Call dic.Add(tbl, tbl)
-    Next
-    
-    Set GetBaseTableNamesBy = dic
-End Function
-
-
-Private Function SelectColumnByRelatecColumn(cols As ADOX.Columns, related_column As String) As ADOX.Column
-    Dim col As ADOX.Column
-    For Each col In cols
-        If col.RelatedColumn = related_column Then Set SelectColumnByRelatecColumn = col: Exit Function
-    Next
-End Function
-
-Private Function GetPropertyNameByFieldName(props As Collection, field_name As String)
-    Dim prop As Collection
-    For Each prop In props
-        If prop(EC_KEY_DB_FIELD_NAME) = field_name Then GetPropertyNameByFieldName = prop(EC_KEY_ENTITY_PROPERTY_NAME)
-    Next
 End Function
 
 Public Function Insert(rec As Object, DbInfo As Object)
@@ -582,7 +467,6 @@ End Property
 ' Private Methods ----------------------------------------------------------------
 Private Function FetchRecordSetByQuery(query_string As String) As ADODB.Recordset
     If cn_.State <> adStateOpen Then cn_.Open
-'    Set FetchRecordSetByQuery = cn_.Execute(query_string)
     Set FetchRecordSetByQuery = New ADODB.Recordset
     Call FetchRecordSetByQuery.Open(query_string, cn_, LockType:=adLockOptimistic)
 End Function

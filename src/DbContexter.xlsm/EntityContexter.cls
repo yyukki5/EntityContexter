@@ -113,6 +113,12 @@ Public Function Initialize(connectionString As String) As EntityContexter
     Set Initialize = Me
 End Function
 
+Private Sub Class_Terminate()
+    If catalog_ Is Nothing Then Else Set catalog_ = Nothing
+    If cn_ Is Nothing Then Else If cn_.State > 0 Then cn_.Close
+End Sub
+
+
 Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, _
                                  Optional schema_name As String, _
                                  Optional dbcontext_name As String = "DbContext" _
@@ -303,10 +309,69 @@ Public Function FetchRecords(entity_name As String, DbInfo As Object, dbc As Obj
     Set FetchRecords = Items
 End Function
 
+
+Public Function FetchRecords2(base_entity_name As String, db_infos As Object, dbc As Object, cnt As Long)
+    Dim rs As Recordset
+                
+    Set rs = FetchRecordSetByQuery(fetchQuery_)
+    Set FetchRecords2 = GetEntityFromRecordSetBy(db_infos, dbc, cnt, rs, base_entity_name)
+    rs.Close
+    
+End Function
+
+Public Function GetEntityFromRecordSetBy(db_infos As Object, dbc As Object, cnt As Long, ByVal rs As ADODB.Recordset, entity_name)
+    Dim Items As New Collection, T As Object, loca As Long, i As Long
+    
+    If cnt > 2 Then Set GetEntityFromRecordSetBy = Nothing:     Exit Function
+    If rs.BOF And rs.EOF Then Set GetEntityFromRecordSetBy = Nothing:     Exit Function
+    rs.MoveFirst
+    Do Until rs.EOF
+        Set T = GetEntityFromFieldsBy(db_infos, dbc, cnt, rs, entity_name)
+        If (T Is Nothing) = False Then Items.Add T
+        
+        rs.MoveFirst:         For i = 0 To loca:            rs.MoveNext:        Next i
+        loca = loca + 1
+    Loop
+        
+    Set GetEntityFromRecordSetBy = IIf(Items.Count = 0, Nothing, Items)
+End Function
+
+
+Private Function GetEntityFromFieldsBy(db_infos As Object, dbc As Object, cnt As Long, ByVal rs As ADODB.Recordset, entity_name)
+    Dim f As field, T, field_name, table_name, props As Collection, prop As Collection, property_name As String, exist_values As Boolean
+    
+    If cnt > LOOP_MAX Then Set GetEntityFromFieldsBy = Nothing:     Exit Function
+    table_name = db_infos(entity_name)(EC_KEY_DB_TABLE_NAME)
+    Set T = dbc.CreateObjectBy((entity_name))
+    Set props = db_infos(entity_name)(EC_KEY_ENTITY_PROPERTIES)
+    
+    For Each prop In props
+        property_name = prop(EC_KEY_ENTITY_PROPERTY_NAME)
+        
+        If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Then
+            Call CallByName(T, property_name, VbSet, _
+                GetEntityFromFieldsBy(db_infos, dbc, cnt + 1, rs, property_name))
+        ElseIf prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
+            Call CallByName(CallByName(T, property_name, VbGet), "Items", VbSet, _
+                GetEntityFromRecordSetBy(db_infos, dbc, cnt + 1, rs, prop(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE)))
+        Else
+            For Each f In rs.Fields
+                If f.Properties("BASECOLUMNNAME") = prop(EC_KEY_DB_FIELD_NAME) And f.Properties("BASETABLENAME") = table_name And IsNull(f.Value) = False Then
+                    Call CallByName(T, property_name, VbLet, f.Value)
+                    exist_values = True
+                End If
+            Next
+        End If
+    Next
+    
+    Set GetEntityFromFieldsBy = IIf(exist_values, T, Nothing)
+End Function
+
 Private Function GetValueBy(rs As ADODB.Recordset, table_name As String, field_name As String)
     Dim f As ADODB.field, prop As ADOX.Property
     
     For Each f In rs.Fields
+    
         If f.Properties("BASECOLUMNNAME") = field_name And f.Properties("BASETABLENAME") = table_name Then
               GetValueBy = f.Value
         End If
@@ -515,9 +580,11 @@ End Property
 
 
 ' Private Methods ----------------------------------------------------------------
-Private Function FetchRecordSetByQuery(query_string As String) As Recordset
+Private Function FetchRecordSetByQuery(query_string As String) As ADODB.Recordset
     If cn_.State <> adStateOpen Then cn_.Open
-    Set FetchRecordSetByQuery = cn_.Execute(query_string)
+'    Set FetchRecordSetByQuery = cn_.Execute(query_string)
+    Set FetchRecordSetByQuery = New ADODB.Recordset
+    Call FetchRecordSetByQuery.Open(query_string, cn_, LockType:=adLockOptimistic)
 End Function
 Private Function FetchRecordSet(table_name As String) As Recordset
     Dim query As String
@@ -1133,11 +1200,4 @@ Private Function CollectionToArray(col As Collection)
     Next
     CollectionToArray = arr
 End Function
-
-
-' Terminate ------------------------------------------------------------------------
-Private Sub Class_Terminate()
-    If catalog_ Is Nothing Then Else Set catalog_ = Nothing
-    If cn_ Is Nothing Then Else If cn_.State > 0 Then cn_.Close
-End Sub
 

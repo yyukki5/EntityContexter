@@ -126,6 +126,8 @@ Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, _
     Dim table_name, tableNames As New Collection, entityInfos As New Collection
     
     ' setting
+    If cn_.State <> adStateOpen Then cn_.Open
+    Set catalog_.ActiveConnection = cn_
     isExportFiles_ = usingAttribute
     schemaName_ = schema_name
     

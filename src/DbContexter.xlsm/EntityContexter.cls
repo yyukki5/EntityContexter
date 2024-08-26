@@ -1012,23 +1012,23 @@ End Function
 
 
 Private Function ConvertDbTableNameToEntitesClassName(dbTbleName As String) As String
-    ConvertDbTableNameToEntitesClassName = Replace(GetEstimatedPluralName(ConvertSnakeToPascalCase(dbTbleName)), "#csv", "")
+    ConvertDbTableNameToEntitesClassName = GetEstimatedPluralName(ConvertSnakeToPascalCase(ConvertToCodeChar(dbTbleName)))
 End Function
 
 Private Function ConvertDbTableNameToEntityClassName(dbTbleName As String) As String
-    ConvertDbTableNameToEntityClassName = Replace(GetEstimatedSingularName(ConvertSnakeToPascalCase(dbTbleName)), "#csv", "")
+    ConvertDbTableNameToEntityClassName = GetEstimatedSingularName(ConvertSnakeToPascalCase(ConvertToCodeChar(dbTbleName)))
 End Function
 
 Private Function ConvertDbTableNameToEntitiesClassFieldName(dbTbleName As String) As String
-    ConvertDbTableNameToEntitiesClassFieldName = GetEstimatedPluralName(ConvertSnakeToCamelCase(dbTbleName)) & "_"
+    ConvertDbTableNameToEntitiesClassFieldName = GetEstimatedPluralName(ConvertSnakeToCamelCase(ConvertToCodeChar(dbTbleName))) & "_"
 End Function
 
 Private Function ConvertDbFieldNameToClassPropertyName(dbFieldName As String) As String
-    ConvertDbFieldNameToClassPropertyName = ConvertSnakeToPascalCase(dbFieldName)
+    ConvertDbFieldNameToClassPropertyName = ConvertSnakeToPascalCase(ConvertToCodeChar(dbFieldName))
 End Function
 
 Private Function ConvertDBFieldNameToClassFieldName(dbFieldName As String) As String
-    ConvertDBFieldNameToClassFieldName = ConvertSnakeToCamelCase(dbFieldName) & "_"
+    ConvertDBFieldNameToClassFieldName = ConvertSnakeToCamelCase(ConvertToCodeChar(dbFieldName)) & "_"
 End Function
 
 Private Function ConvertSnakeToPascalCase(snakeCase As String) As String
@@ -1079,6 +1079,20 @@ Private Function GetEstimatedSingularName(pluralName As String) As String
 re:
     GetEstimatedSingularName = s
 End Function
+
+Private Function ConvertToCodeChar(db_element_name As String) As String
+    Dim s As String, i As Long, c As Long, ch As String
+    
+    db_element_name = Replace(db_element_name, "#csv", "")
+    For i = 1 To Len(db_element_name)
+        ch = Mid(db_element_name, i, 1)
+        c = Asc(ch)
+        If (48 <= c Or c <= 57 Or 65 <= c Or c <= 90 Or c = 95 Or 97 <= c Or c <= 122) Then s = s & ch
+    Next i
+    
+    ConvertToCodeChar = s
+End Function
+
 
 Private Function CollectionToArray(col As Collection)
     Dim arr, c, i As Long

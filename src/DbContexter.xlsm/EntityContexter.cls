@@ -18,7 +18,7 @@ Option Explicit
 ' ---------------------------------------------------------------------------------
 
 Private Const VBA_CLASS_MODULE_ID As Long = 2
-Private Const LOOP_MAX As Long = 5
+Private Const LOOP_MAX As Long = 2
 
 Private Const EC_KEY_ENTITY_NAME As String = "EntityName"
 Private Const EC_KEY_ENTITIES_NAME As String = "EntitiesName"
@@ -217,13 +217,21 @@ Public Function SetQueryOrderBy(db_info, property_name As String, Optional entit
     End If
 End Function
 
-Public Function SetQueryInclude(db_info As Variant, entity_name, related_entity_name) As String
-    Dim table_name As String, foregin_table_name As String, key_name As String, foregin_key_name As String
+Public Function SetQueryInclude(db_info As Variant, entity_name, entity_property_name) As String
+    Dim table_name As String, related_entity_name As String, foregin_table_name As String, key_name As String, foregin_key_name As String
     
     table_name = db_info(entity_name)(EC_KEY_DB_TABLE_NAME)
-    foregin_table_name = db_info(related_entity_name)(EC_KEY_DB_TABLE_NAME)
-    key_name = db_info(entity_name)("Properties")(related_entity_name)(EC_KEY_DB_FIELD_NAME)
-    foregin_key_name = db_info(entity_name)("Properties")(related_entity_name)(EC_KEY_ENTITY_FOREIGNKEY)
+    If db_info(entity_name)("Properties")(entity_property_name)(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Then
+        related_entity_name = db_info(entity_name)("Properties")(entity_property_name)(EC_KEY_ENTITY_FOREIGN_TABLE)
+        foregin_table_name = db_info(related_entity_name)(EC_KEY_DB_TABLE_NAME)
+        key_name = db_info(entity_name)("Properties")(related_entity_name)(EC_KEY_DB_FIELD_NAME)
+        foregin_key_name = db_info(entity_name)("Properties")(related_entity_name)(EC_KEY_ENTITY_FOREIGNKEY)
+    End If
+    If db_info(entity_name)("Properties")(entity_property_name)(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
+        foregin_table_name = db_info(entity_name)("Properties")(entity_property_name)(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE)
+        key_name = db_info(entity_name)("Properties")(entity_property_name)(EC_KEY_DB_FIELD_NAME)
+        foregin_key_name = db_info(entity_name)("Properties")(entity_property_name)(EC_KEY_ENTITY_INVERSE_FOREIGNKEY)
+    End If
     
     fetchQuery_ = "(" & fetchQuery_ & ") left outer join " & foregin_table_name & " on " & table_name & "." & key_name & " = " & foregin_table_name & "." & foregin_key_name
 End Function
@@ -232,61 +240,59 @@ Public Function SetQueryToList()
     fetchQuery_ = "SELECT * FROM (" & fetchQuery_ & ")"
 End Function
 
-Public Function FetchRecords(base_entity_name As String, db_infos As Object, dbc As Object, cnt As Long) As Collection
-    Dim rs As Recordset
-                
-    Set rs = FetchRecordSetByQuery(fetchQuery_)
-    Set FetchRecords = GetEntityFromRecordSetBy(db_infos, dbc, cnt, rs, base_entity_name)
-    rs.Close
-    
-End Function
-
-Public Function GetEntityFromRecordSetBy(db_infos As Object, dbc As Object, cnt As Long, ByVal rs As ADODB.Recordset, entity_name)
-    Dim Items As New Collection, T As Object, loca As Long, i As Long
-    
-    If cnt > 2 Then Set GetEntityFromRecordSetBy = Nothing:     Exit Function
-    If rs.BOF And rs.EOF Then Set GetEntityFromRecordSetBy = Nothing:     Exit Function
+Public Function FetchRecords(entity_name As String, DbInfo As Object, dbc As Object, cnt As Long, Optional qry As String)
+    Dim rs As Recordset, Items As New Collection, T As Object, props As Collection, prop As Collection
+    Dim fkey, kyfld, foreign_table_name As String, ent_name, property_name As String, qry1, tbls As Collection
+        
+    If cnt > LOOP_MAX Then Set FetchRecords = Nothing:     Exit Function
+        
+    Set props = DbInfo(entity_name)(EC_KEY_ENTITY_PROPERTIES)
+    If qry = "" Then qry = fetchQuery_ ' todo
+    Set rs = FetchRecordSetByQuery(qry)
+        
+    If rs.BOF And rs.EOF Then Set FetchRecords = Nothing:     Exit Function
     rs.MoveFirst
     Do Until rs.EOF
-        Set T = GetEntityFromFieldsBy(db_infos, dbc, cnt, rs, entity_name)
-        If (T Is Nothing) = False Then Items.Add T
-        
-        rs.MoveFirst:         For i = 0 To loca:            rs.MoveNext:        Next i
-        loca = loca + 1
+    
+        Set T = dbc.CreateObjectBy(entity_name)
+        For Each prop In props
+            If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Then
+                
+                fkey = prop(EC_KEY_ENTITY_FOREIGNKEY)
+                kyfld = rs.Fields(prop(EC_KEY_DB_FIELD_NAME)).Value
+                foreign_table_name = prop(EC_KEY_ENTITY_FOREIGN_TABLE)
+                ent_name = prop(EC_KEY_ENTITY_FOREIGN_TABLE) ' todo
+                
+                qry1 = "SELECT * FROM " & foreign_table_name & " WHERE " & fkey & " = " & kyfld
+                Set tbls = FetchRecords((ent_name), DbInfo, dbc, cnt + 1, (qry1))
+                
+                property_name = prop(EC_KEY_ENTITY_PROPERTY_NAME)
+                If (tbls Is Nothing) = False Then Call CallByName(T, property_name, VbSet, tbls.Item(1))
+            
+            ElseIf prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
+                
+                fkey = prop(EC_KEY_ENTITY_INVERSE_FOREIGNKEY)
+                kyfld = rs.Fields(prop(EC_KEY_DB_FIELD_NAME)).Value
+                foreign_table_name = prop(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE)
+                ent_name = prop(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE) ' todo
+                
+                qry1 = "SELECT * FROM " & ent_name & " WHERE " & fkey & " = " & kyfld
+                Set tbls = FetchRecords((ent_name), DbInfo, dbc, cnt + 1, (qry1))
+                
+                property_name = prop(EC_KEY_ENTITY_PROPERTY_NAME)
+                If (tbls Is Nothing) = False Then Call CallByName(CallByName(T, property_name, VbGet), "Items", VbSet, tbls)
+            
+            Else
+                property_name = prop(EC_KEY_ENTITY_PROPERTY_NAME)
+                Call CallByName(T, property_name, VbLet, rs.Fields(prop(EC_KEY_DB_FIELD_NAME)))
+            End If
+        Next
+        Items.Add T
+        rs.MoveNext
     Loop
-        
-    Set GetEntityFromRecordSetBy = IIf(Items.Count = 0, Nothing, Items)
-End Function
-
-
-Private Function GetEntityFromFieldsBy(db_infos As Object, dbc As Object, cnt As Long, ByVal rs As ADODB.Recordset, entity_name)
-    Dim f As field, T, field_name, table_name, props As Collection, prop As Collection, property_name As String, exist_values As Boolean
+    rs.Close
     
-    If cnt > LOOP_MAX Then Set GetEntityFromFieldsBy = Nothing:     Exit Function
-    table_name = db_infos(entity_name)(EC_KEY_DB_TABLE_NAME)
-    Set T = dbc.CreateObjectBy((entity_name))
-    Set props = db_infos(entity_name)(EC_KEY_ENTITY_PROPERTIES)
-    
-    For Each prop In props
-        property_name = prop(EC_KEY_ENTITY_PROPERTY_NAME)
-        
-        If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Then
-            Call CallByName(T, property_name, VbSet, _
-                GetEntityFromFieldsBy(db_infos, dbc, cnt + 1, rs, property_name))
-        ElseIf prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
-            Call CallByName(CallByName(T, property_name, VbGet), "Items", VbSet, _
-                GetEntityFromRecordSetBy(db_infos, dbc, cnt + 1, rs, prop(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE)))
-        Else
-            For Each f In rs.Fields
-                If f.Properties("BASECOLUMNNAME") = prop(EC_KEY_DB_FIELD_NAME) And f.Properties("BASETABLENAME") = table_name And IsNull(f.Value) = False Then
-                    Call CallByName(T, property_name, VbLet, f.Value)
-                    exist_values = True
-                End If
-            Next
-        End If
-    Next
-    
-    Set GetEntityFromFieldsBy = IIf(exist_values, T, Nothing)
+    Set FetchRecords = Items
 End Function
 
 Public Function Insert(rec As Object, DbInfo As Object)

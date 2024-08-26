@@ -710,10 +710,11 @@ Private Function GetVBComponent(componentName As String) As Object
 End Function
 
 Private Function GetDbContextCode(infos As Collection, dbc_name As String) As String
-    Dim texts As New Collection, str As String, txt
+    Dim texts As New Collection, str As String, txt, tmp As String
     Dim info As Collection, prop As Collection
     Const db_table_name As String = "DBTableName"
 
+    On Error Resume Next
     With texts
         If isExportFiles_ Then
             .Add "VERSION 1.0 CLASS"
@@ -782,42 +783,28 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add "    Dim infos As New Collection, info As Collection, props As Collection, prop As Collection"
         .Add ""
         For Each info In infos
-            .Add "    Set info = ec_.CreateDbInfoBy(" & _
-                        "  table_name   :=""" & info(EC_KEY_DB_TABLE_NAME) & """" & _
-                        ", entity_name  :=""" & info(EC_KEY_ENTITY_NAME) & """" & _
-                        ", entities_name:=""" & info(EC_KEY_ENTITIES_NAME) & """" & _
-                        ")"
-            If info(EC_KEY_ENTITY_DB_TABLE).Keys.Count > 0 Then .Add "    Call info.Add(""" & info(EC_KEY_ENTITY_DB_TABLE).Keys(0).Columns(0).Name & """, ""PrimaryKey"")"
+            tmp = "    Set info = ec_.CreateDbInfoBy( table_name   :=""" & info(EC_KEY_DB_TABLE_NAME) & """"
+            tmp = tmp & ", entity_name  :=""" & info(EC_KEY_ENTITY_NAME) & """"
+            tmp = tmp & ", entities_name:=""" & info(EC_KEY_ENTITIES_NAME) & """"
+            tmp = tmp & ", primary_key:=""" & info(EC_KEY_ENTITY_DB_TABLE).Keys(0).Columns(0).Name & """"
+            tmp = tmp & ")"
+            .Add tmp
+            
             .Add ""
             .Add "    Set props = New Collection"
             For Each prop In info("Properties")
-                If prop(EC_KEY_ENTITY_IS_PROPERTY_RELATED) = False Then
-                    .Add "    Set prop = ec_.CreateDbInfoPropertyBy(" & _
-                                    "property_name:=""" & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """" & _
-                                    ", entity_field_name:=""" & prop(EC_KEY_ENTITY_FIELD_NAME) & """" & _
-                                    ", entity_property_type:=""" & prop(EC_KEY_ENTITY_PROPERTY_TYPE) & """" & _
-                                    ", db_field_name:=""" & prop(EC_KEY_ENTITY_DB_COLUMN).Name & """" & _
-                                    ", auto_increment:=" & prop(EC_KEY_ENTITY_DB_COLUMN).Properties(EC_KEY_DB_AUTOINCREMENT) & _
-                                    ")"
-                    .Add "    Call props.Add(prop, """ & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """)"
-                Else
-                    If prop(EC_KEY_ENTITY_FOREIGNKEY) <> "" Then
-                        .Add "    Set prop = ec_.CreateDbInfoPropertyBy(" & _
-                                        "property_name:=""" & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """" & _
-                                        ", db_field_name:=""" & prop(EC_KEY_DB_FIELD_NAME) & """" & _
-                                        ", foreign_key:=""" & prop(EC_KEY_ENTITY_FOREIGNKEY) & """" & _
-                                        ", foreign_table:=""" & prop(EC_KEY_ENTITY_FOREIGN_TABLE) & """" & _
-                                        ")"
-                    Else
-                        .Add "    Set prop = ec_.CreateDbInfoPropertyBy(" & _
-                                        "property_name:=""" & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """" & _
-                                        ", db_field_name:=""" & prop(EC_KEY_DB_FIELD_NAME) & """" & _
-                                        ", inverse_foreign_key:=""" & prop(EC_KEY_ENTITY_INVERSE_FOREIGNKEY) & """" & _
-                                        ", inverse_foreign_table:=""" & prop(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE) & """" & _
-                                        ")"
-                    End If
-                    .Add "    Call props.Add(prop , """ & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """)"
-                End If
+                tmp = "    Set prop = ec_.CreateDbInfoPropertyBy(property_name:=""" & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """"
+                tmp = tmp & ", entity_field_name:=""" & prop(EC_KEY_ENTITY_FIELD_NAME) & """"
+                tmp = tmp & ", entity_property_type:=""" & prop(EC_KEY_ENTITY_PROPERTY_TYPE) & """"
+                tmp = tmp & ", db_field_name:=""" & prop(EC_KEY_ENTITY_DB_COLUMN).Name & """"
+                tmp = tmp & ", auto_increment:=" & prop(EC_KEY_ENTITY_DB_COLUMN).Properties(EC_KEY_DB_AUTOINCREMENT)
+                tmp = tmp & ", foreign_key:=""" & prop(EC_KEY_ENTITY_FOREIGNKEY) & """"
+                tmp = tmp & ", foreign_table:=""" & prop(EC_KEY_ENTITY_FOREIGN_TABLE) & """"
+                tmp = tmp & ", inverse_foreign_key:=""" & prop(EC_KEY_ENTITY_INVERSE_FOREIGNKEY) & """"
+                tmp = tmp & ", inverse_foreign_table:=""" & prop(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE) & """"
+                tmp = tmp & ")"
+                .Add tmp
+                
             Next
             .Add "    Call info.Add(props, """ & EC_KEY_ENTITY_PROPERTIES & """)"
             .Add "    Call infos.Add(info, """ & info(EC_KEY_ENTITY_NAME) & """)"

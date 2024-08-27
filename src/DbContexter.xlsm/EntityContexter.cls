@@ -164,15 +164,12 @@ End Function
 
 
 Public Function SetQueryDbSet(db_info, entity_name) As String
-    fetchQuery_ = db_info(entity_name)(EC_KEY_DB_TABLE_NAME)
+    fetchQuery_ = "select * from " & db_info(entity_name)(EC_KEY_SQL_TABLE_NAME)
 End Function
 
 Public Function SetQueryOrderBy(db_info, property_name As String, Optional entity_name As String) As String
-    If entity_name = "" Then
-        fetchQuery_ = "select * from (" & fetchQuery_ & ") order by " & db_info(entity_name)(EC_KEY_ENTITY_PROPERTIES)(property_name)(EC_KEY_DB_FIELD_NAME) & " asc"
-    Else
-        fetchQuery_ = "select * from (" & fetchQuery_ & ") order by " & db_info(entity_name)(EC_KEY_DB_TABLE_NAME) & "." & db_info(entity_name)(EC_KEY_ENTITY_PROPERTIES)(property_name)(EC_KEY_DB_FIELD_NAME) & " asc"
-    End If
+    lastSubQueryName_ = lastSubQueryName_ & "T"
+    fetchQuery_ = "select * from (" & fetchQuery_ & ") " & lastSubQueryName_ & " order by " & lastSubQueryName_ & "." & db_info(entity_name)(EC_KEY_ENTITY_PROPERTIES)(property_name)(EC_KEY_DB_FIELD_NAME) & " asc"
 End Function
 
 Public Function SetQueryInclude(db_info As Variant, entity_name, entity_property_name) As String
@@ -195,7 +192,7 @@ Public Function SetQueryInclude(db_info As Variant, entity_name, entity_property
 End Function
 
 Public Function SetQueryToList()
-    fetchQuery_ = "SELECT * FROM (" & fetchQuery_ & ")"
+    fetchQuery_ = "SELECT * FROM (" & fetchQuery_ & ") " & lastSubQueryName_
 End Function
 
 Public Function FetchRecords(entity_name As String, DbInfo As Object, dbc As Object, cnt As Long, Optional qry As String)
@@ -434,7 +431,7 @@ Private Function FetchRecordSetByQuery(query_string As String) As ADODB.Recordse
     Set FetchRecordSetByQuery = New ADODB.Recordset
     Call FetchRecordSetByQuery.Open(query_string, cn_, LockType:=adLockReadOnly)
 End Function
-    
+
 Private Function GetTableNameFromDb() As Collection
     Dim tableNames As New Collection, sch As ADODB.Recordset, table_names As Collection
     
@@ -491,7 +488,7 @@ End Function
 Private Function GetEntityInfoByTableName(table_name_info As Collection) As Collection
     Dim props As New Collection, prop As Collection, tbl As ADOX.Table, col As ADOX.Column, entity_info As New Collection
     Dim ky As ADOX.Key, table_name As String
-
+    
     table_name = table_name_info(EC_KEY_DB_TABLE_NAME)
     Set tbl = catalog_.Tables(table_name)
     For Each col In tbl.Columns
@@ -505,7 +502,7 @@ Private Function GetEntityInfoByTableName(table_name_info As Collection) As Coll
     Call entity_info.Add(ConvertDbTableNameToEntitesClassName(table_name), EC_KEY_ENTITIES_NAME)
     Call entity_info.Add(tbl, EC_KEY_ENTITY_ADOX_TABLE)
     Call entity_info.Add(props, EC_KEY_ENTITY_PROPERTIES)
-    
+        
     Set GetEntityInfoByTableName = entity_info
 End Function
 

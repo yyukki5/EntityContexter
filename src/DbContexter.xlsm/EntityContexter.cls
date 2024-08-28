@@ -192,6 +192,7 @@ Public Function SetQueryInclude(db_info As Variant, entity_name, entity_property
 End Function
 
 Public Function SetQueryToList()
+    lastSubQueryName_ = lastSubQueryName_ & "T"
     fetchQuery_ = "SELECT * FROM (" & fetchQuery_ & ") " & lastSubQueryName_
 End Function
 

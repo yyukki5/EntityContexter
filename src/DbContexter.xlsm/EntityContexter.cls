@@ -46,7 +46,9 @@ Private catalog_ As ADOX.Catalog
 Private isExportFiles_ As Boolean
 Private schemaName_ As String
 Private connectionString_ As String
+
 Private fetchQuery_ As String
+Private fetchEntityName_ As String
 Private lastSubQueryName_ As String
 
 
@@ -144,14 +146,18 @@ Public Function CreateDbInfoPropertyBy(Optional property_name, _
     If IsMissing(db_table_name) = False Then Call prop.Add(db_table_name, EC_KEY_DB_TABLE_NAME)
     If IsMissing(db_field_name) = False Then Call prop.Add(db_field_name, EC_KEY_DB_FIELD_NAME)
     If IsMissing(auto_increment) = False Then Call prop.Add(auto_increment, EC_KEY_DB_AUTOINCREMENT)
-    If IsMissing(foreign_key) = False Then
+    If IsMissing(foreign_key) Then
+        Call prop.Add(False, EC_KEY_ENTITY_EXIST_FOREIGNKEY)
+    ElseIf foreign_key <> "" Then
         Call prop.Add(True, EC_KEY_ENTITY_EXIST_FOREIGNKEY)
         Call prop.Add(foreign_key, EC_KEY_ENTITY_FOREIGNKEY)
         Call prop.Add(foreign_table, EC_KEY_ENTITY_FOREIGN_TABLE)
     Else
         Call prop.Add(False, EC_KEY_ENTITY_EXIST_FOREIGNKEY)
     End If
-    If IsMissing(inverse_foreign_key) = False Then
+    If IsMissing(inverse_foreign_key) Then
+        Call prop.Add(False, EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY)
+    ElseIf inverse_foreign_key <> "" Then
         Call prop.Add(True, EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY)
         Call prop.Add(inverse_foreign_key, EC_KEY_ENTITY_INVERSE_FOREIGNKEY)
         Call prop.Add(inverse_foreign_table, EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE)
@@ -164,12 +170,24 @@ End Function
 
 
 Public Function SetQueryDbSet(db_info, entity_name) As String
+    fetchEntityName_ = entity_name
     fetchQuery_ = "select * from " & db_info(entity_name)(EC_KEY_SQL_TABLE_NAME)
 End Function
 
-Public Function SetQueryOrderBy(db_info, property_name As String, Optional entity_name As String) As String
+Public Function SetQueryWhere(db_info, property_name As String, sql_operator As String, compare_value As String, Optional entity_name As String)
+    entity_name = IIf(entity_name = "", fetchEntityName_, entity_name)
     lastSubQueryName_ = lastSubQueryName_ & "T"
-    fetchQuery_ = "select * from (" & fetchQuery_ & ") " & lastSubQueryName_ & " order by " & lastSubQueryName_ & "." & db_info(entity_name)(EC_KEY_ENTITY_PROPERTIES)(property_name)(EC_KEY_DB_FIELD_NAME) & " asc"
+    fetchQuery_ = "select * from (" & fetchQuery_ & ") " & lastSubQueryName_ & " Where " & lastSubQueryName_ & "." & db_info(entity_name)(EC_KEY_ENTITY_PROPERTIES)(property_name)(EC_KEY_DB_FIELD_NAME) & " " & sql_operator & " " & compare_value
+End Function
+
+Public Function SetQueryOrderBy(db_info, property_name As String, Optional entity_name As String, Optional is_asc As Boolean) As String
+    entity_name = IIf(entity_name = "", fetchEntityName_, entity_name)
+    lastSubQueryName_ = lastSubQueryName_ & "T"
+    fetchQuery_ = "select * from (" & fetchQuery_ & ") " & lastSubQueryName_ & " order by " & lastSubQueryName_ & "." & db_info(entity_name)(EC_KEY_ENTITY_PROPERTIES)(property_name)(EC_KEY_DB_FIELD_NAME) & IIf(is_asc, " asc", " desc")
+End Function
+Public Function SetQueryThenBy(db_info, property_name As String, Optional entity_name As String, Optional is_asc As Boolean) As String
+    entity_name = IIf(entity_name = "", fetchEntityName_, entity_name)
+    fetchQuery_ = fetchQuery_ & "," & lastSubQueryName_ & "." & db_info(entity_name)(EC_KEY_ENTITY_PROPERTIES)(property_name)(EC_KEY_DB_FIELD_NAME) & IIf(is_asc, " asc", " desc")
 End Function
 
 Public Function SetQueryInclude(db_info As Variant, entity_name, entity_property_name) As String
@@ -189,11 +207,6 @@ Public Function SetQueryInclude(db_info As Variant, entity_name, entity_property
     End If
     
     fetchQuery_ = "(" & fetchQuery_ & ") left outer join " & foregin_table_name & " on " & table_name & "." & key_name & " = " & foregin_table_name & "." & foregin_key_name
-End Function
-
-Public Function SetQueryToList()
-    lastSubQueryName_ = lastSubQueryName_ & "T"
-    fetchQuery_ = "SELECT * FROM (" & fetchQuery_ & ") " & lastSubQueryName_
 End Function
 
 Public Function FetchRecords(entity_name As String, DbInfo As Object, dbc As Object, cnt As Long, Optional qry As String)
@@ -723,16 +736,31 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add "        Call ec_.SetQueryDbSet(DbInfo, entity_name):    entity_name_ = entity_name:     Set DbSet = Me"
         .Add "End Function"
         .Add ""
+        .Add "Public Function Where(property_name As String, sql_operator As String, compare_value As String, Optional entity_name As String) As " & dbc_name
+        .Add "        Call ec_.SetQueryWhere(DbInfo, property_name, sql_operator, compare_value, entity_name):      Set Where = Me"
+        .Add "End Function"
+        .Add ""
         .Add "Public Function Include(entity_name As String) As " & dbc_name
         .Add "    Call ec_.SetQueryInclude(DbInfo, entity_name_, entity_name):     Set Include = Me"
         .Add "End Function"
         .Add ""
         .Add "Public Function OrderBy(property_name As String, Optional entity_name As String) As " & dbc_name
-        .Add "    Call ec_.SetQueryOrderBy(DbInfo, property_name, entity_name):   Set OrderBy = Me"
+        .Add "    Call ec_.SetQueryOrderBy(DbInfo, property_name, entity_name, true):   Set OrderBy = Me"
+        .Add "End Function"
+        .Add ""
+        .Add "Public Function OrderByDescending(property_name As String, Optional entity_name As String) As " & dbc_name
+        .Add "    Call ec_.SetQueryOrderBy(DbInfo, property_name, entity_name, false):   Set OrderByDescending = Me"
+        .Add "End Function"
+        .Add ""
+        .Add "Public Function ThenBy(property_name As String, Optional entity_name As String) As " & dbc_name
+        .Add "    Call ec_.SetQueryThenBy(DbInfo, property_name, entity_name, false):   Set ThenBy = Me"
+        .Add "End Function"
+        .Add ""
+        .Add "Public Function ThenByDescending(property_name As String, Optional entity_name As String) As " & dbc_name
+        .Add "    Call ec_.SetQueryThenBy(DbInfo, property_name, entity_name, false):   Set ThenByDescending = Me"
         .Add "End Function"
         .Add ""
         .Add "Public Function ToList() As Variant"
-        .Add "    Call ec_.SetQueryToList"
         .Add "    Set ToList = ec_.FetchRecords(entity_name_, DbInfo, Me, 0)"
         .Add "End Function"
         .Add ""

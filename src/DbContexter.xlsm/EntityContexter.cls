@@ -934,7 +934,7 @@ Private Function GetEntityPropertyTypeBy(col As ADOX.Column) As String
     Dim propertyTypeName As String, fieldType As ADODB.DataTypeEnum
 
     fieldType = col.Type
-    If col.Attributes = adColNullable Then
+    If col.Attributes >= adColNullable Then
         propertyTypeName = "Variant"
     ElseIf fieldType = adInteger Then propertyTypeName = "Integer"
     ElseIf fieldType = adSingle Then propertyTypeName = "Single"

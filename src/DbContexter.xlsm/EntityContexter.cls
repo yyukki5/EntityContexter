@@ -25,6 +25,7 @@ Private Const EC_KEY_ENTITIES_NAME As String = "EntitiesName"
 Private Const EC_KEY_ENTITY_ADOX_TABLE As String = "ADOX.Table"
 Private Const EC_KEY_DB_TABLE_NAME As String = "DBTableName"
 Private Const EC_KEY_SQL_TABLE_NAME As String = "SqlTableName"
+Private Const EC_KEY_TABLE_PRIMARY_KEY As String = "PrimaryKey"
 
 Private Const EC_KEY_ENTITY_PROPERTIES As String = "Properties"
 Private Const EC_KEY_ENTITY_PROPERTY_NAME As String = "PropertyName"

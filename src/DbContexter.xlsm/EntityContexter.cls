@@ -10,7 +10,7 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' Entity Contexer -----------------------------------------------------------------
-' Version   : 0.3.0
+' Version   : 0.3.1
 ' Project   : https://github.com/yyukki5/EntityContexter
 ' Depend on : Microsoft ActiveX Data Objects X.X Library, Microsoft ADO Ext. 2.8 for DDL and Security, Microsoft Scripting RunTime
 ' Before Using : Need to check "Trust access to the VBA project object model"
@@ -40,6 +40,7 @@ Private Const EC_KEY_ENTITY_FOREIGN_TABLE As String = "ForeignTable"
 Private Const EC_KEY_ENTITY_INVERSE_FOREIGNKEY As String = "InverseForeignKey"
 Private Const EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE As String = "InverseForeignTable"
 Private Const EC_KEY_DB_FIELD_NAME As String = "DbFieldName"
+Private Const EC_KEY_DB_FIELD_TYPE As String = "DbFieldType"
 Private Const EC_KEY_DB_AUTOINCREMENT As String = "Autoincrement"
 
 Private cn_ As ADODB.Connection
@@ -134,6 +135,7 @@ Public Function CreateDbInfoPropertyBy( _
     Optional entity_property_type As String, _
     Optional db_table_name As String, _
     Optional db_field_name As String, _
+    Optional db_field_type As ADOX.DataTypeEnum = 0, _
     Optional auto_increment As Boolean = False, _
     Optional foreign_key As String, _
     Optional foreign_table As String, _
@@ -148,6 +150,7 @@ Public Function CreateDbInfoPropertyBy( _
     Call prop.Add(entity_property_type, EC_KEY_ENTITY_PROPERTY_TYPE)
     Call prop.Add(db_table_name, EC_KEY_DB_TABLE_NAME)
     Call prop.Add(db_field_name, EC_KEY_DB_FIELD_NAME)
+    Call prop.Add(db_field_type, EC_KEY_DB_FIELD_TYPE)
     Call prop.Add(auto_increment, EC_KEY_DB_AUTOINCREMENT)
     
     If foreign_key <> "" Then
@@ -265,21 +268,14 @@ Public Function FetchRecords(entity_name As String, DbInfo As Object, dbc As Obj
 End Function
 
 Public Function Insert(rec As Object, DbInfo As Object)
-    Dim rs As New ADODB.Recordset, fl, vl
-    Dim exceptional_field As String, exceptional_prop As Collection
-        
-    fl = GetFieldsListByEntity(rec, DbInfo)
-    vl = GetValuesListByEntity(rec, DbInfo)
-    
+    Dim rs As New ADODB.Recordset, prop As Collection
+                                
 On Error GoTo errOpen
     If cn_.State <> adStateOpen Then cn_.Open
-    Call rs.Open(Source:=GetTableNameByEntity(rec, DbInfo), ActiveConnection:=cn_, LockType:=adLockOptimistic)
-
     Call cn_.BeginTrans
 On Error GoTo errTrans
-    Call rs.AddNew(fl, vl)
-    Call SetAutoAutoincrementValues(rec, DbInfo, rs)
-    Call rs.Close
+    Call cn_.Execute(CommandText:=CreateInsertQuery(rec, DbInfo))
+    Call SetMaxValueToAutoincrementFields(rec, DbInfo)
     Call cn_.CommitTrans
     Exit Function
 
@@ -291,21 +287,14 @@ errOpen:
 End Function
 
 Public Function Update(rec As Object, DbInfo As Object)
-    Dim rs As New ADODB.Recordset, fl, vl
     
     If HasPrimaryKey(rec, DbInfo) = False Then Call Err.Raise(10001, "EntityContexter.Update()", "Table has no primary key")
     
-    fl = GetFieldsListByEntity(rec, DbInfo)
-    vl = GetValuesListByEntity(rec, DbInfo)
-    
 On Error GoTo errOpen
     If cn_.State <> adStateOpen Then cn_.Open
-    Call rs.Open(Source:=CreateQueryForUpdate(rec, DbInfo), ActiveConnection:=cn_, LockType:=adLockOptimistic)
-        
     Call cn_.BeginTrans
 On Error GoTo errTrans
-    Call rs.Update(fl, vl)
-    Call rs.Close
+    Call cn_.Execute(CommandText:=CreateUpdateQuery(rec, DbInfo))
     Call cn_.CommitTrans
     Exit Function
 
@@ -316,13 +305,11 @@ errOpen:
 End Function
 
 Public Function Delete(rec As Object, DbInfo As Object)
-    Dim rs As New ADODB.Recordset
     
-    If HasPrimaryKey(rec, DbInfo) = False Then Call Err.Raise(10001, "EntityContexter.Update()", "Table has no primary key")
+    If HasPrimaryKey(rec, DbInfo) = False Then Call Err.Raise(10001, "EntityContexter.Delete()", "Table has no primary key")
     
 On Error GoTo errOpen
     If cn_.State <> adStateOpen Then cn_.Open
-        
     Call cn_.BeginTrans
 On Error GoTo errTrans
     Call cn_.Execute(CommandText:=CreateDeleteQuery(rec, DbInfo))
@@ -361,7 +348,8 @@ Private Function GetValuesListByEntity(rec As Object, DbInfo As Object)
     For Each prop In props
         If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
         Else
-            If prop(EC_KEY_DB_AUTOINCREMENT) = False Then col.Add CallByName(rec, prop(EC_KEY_ENTITY_PROPERTY_NAME), VbGet)
+            'If prop(EC_KEY_DB_AUTOINCREMENT) = False Then col.Add CallByName(rec, prop(EC_KEY_ENTITY_PROPERTY_NAME), VbGet)
+            If prop(EC_KEY_DB_AUTOINCREMENT) = False Then col.Add ConvertValueToSqlQuery(prop(EC_KEY_ENTITY_PROPERTY_NAME), rec, DbInfo)
         End If
     Next
     GetValuesListByEntity = CollectionToArray(col)
@@ -372,7 +360,7 @@ Private Function GetFieldsListByEntity(rec As Object, DbInfo As Object)
     Dim i As Long, value_list, props As Collection, prop As Collection, col As New Collection
         
     Set props = DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
-    
+        
     For Each prop In props
         If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
         Else
@@ -383,21 +371,21 @@ Private Function GetFieldsListByEntity(rec As Object, DbInfo As Object)
         
 End Function
 
-Private Function SetAutoAutoincrementValues(rec As Object, DbInfo As Object, rs As ADODB.Recordset)
+Private Function SetMaxValueToAutoincrementFields(rec As Object, DbInfo As Object)
     Dim i As Long, prop As Collection
-        
+    
     i = 0
     For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
         i = i + 1
         If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
         Else
             If prop(EC_KEY_DB_AUTOINCREMENT) = True Then
-                Call CallByName(rec, prop(EC_KEY_ENTITY_PROPERTY_NAME), VbLet, rs.Fields(prop(EC_KEY_DB_FIELD_NAME)).Value)
+                Call CallByName(rec, prop(EC_KEY_ENTITY_PROPERTY_NAME), VbLet, _
+                    cn_.Execute("Select Max(" & prop(EC_KEY_DB_FIELD_NAME) & ") From " & DbInfo(TypeName(rec))(EC_KEY_SQL_TABLE_NAME)).Fields(0).Value)
             End If
         End If
     Next
 End Function
-
 
 Private Function HasPrimaryKey(rec As Object, DbInfo As Object) As Boolean
     
@@ -412,32 +400,71 @@ Private Function CreateDeleteQuery(rec As Object, DbInfo As Object) As String
     table_name = GetTableNameByEntity(rec, DbInfo)
     key_prop_name = GetPrimaryKeyPropertyByEntity(rec, DbInfo)
     key_field_name = DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)(key_prop_name)(EC_KEY_DB_FIELD_NAME)
-    key_value = ConvertValueToSqlCode(key_prop_name, rec, DbInfo)
+    key_value = ConvertValueToSqlQuery(key_prop_name, rec, DbInfo)
     
     CreateDeleteQuery = "Delete From " & table_name & " Where " & key_field_name & " = " & key_value
     
 End Function
 
-
-Private Function CreateQueryForUpdate(rec As Object, DbInfo As Object) As String
-    Dim table_name As String, key_prop_name As String, key_field_name As String, key_value As Variant
+Private Function CreateUpdateQuery(rec As Object, DbInfo As Object) As String
+    Dim table_name As String, key_prop_name As String, key_field_name As String, key_value As Variant, qry As String, prop As Collection
     
     table_name = GetTableNameByEntity(rec, DbInfo)
     key_prop_name = GetPrimaryKeyPropertyByEntity(rec, DbInfo)
     key_field_name = DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)(key_prop_name)(EC_KEY_DB_FIELD_NAME)
-    key_value = ConvertValueToSqlCode(key_prop_name, rec, DbInfo)
+    key_value = ConvertValueToSqlQuery(key_prop_name, rec, DbInfo)
     
-    CreateQueryForUpdate = "Select * From " & table_name & " Where " & key_field_name & " = " & key_value
+    qry = "Update " & DbInfo(TypeName(rec))(EC_KEY_SQL_TABLE_NAME) & " set "
+    For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
+        If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
+        Else
+            If prop(EC_KEY_DB_AUTOINCREMENT) = False Then _
+                qry = qry & prop(EC_KEY_DB_FIELD_NAME) & " = " & ConvertValueToSqlQuery((prop(EC_KEY_ENTITY_PROPERTY_NAME)), rec, DbInfo) & ", "
+        End If
+    Next
+    qry = Left(qry, Len(qry) - 2)
+    qry = qry & " Where " & key_field_name & " = " & key_value
     
+    CreateUpdateQuery = qry
 End Function
 
-Private Function ConvertValueToSqlCode(prop_name As String, rec As Object, DbInfo As Object) As String
-    ' todo, convert value to sql code using by dbtype
-    Dim v As Variant
+Private Function CreateInsertQuery(rec As Object, DbInfo As Object) As String
+    Dim qry As String, field_names As String, field_values As String, prop As Collection
+        
+    qry = "Insert into " & DbInfo(TypeName(rec))(EC_KEY_SQL_TABLE_NAME)
+    For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
+        If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
+        Else
+            If prop(EC_KEY_DB_AUTOINCREMENT) = False Then
+                field_names = field_names & prop(EC_KEY_DB_FIELD_NAME) & ", "
+                field_values = field_values & ConvertValueToSqlQuery((prop(EC_KEY_ENTITY_PROPERTY_NAME)), rec, DbInfo) & ", "
+            End If
+        End If
+    Next
+    field_names = Left(field_names, Len(field_names) - 2)
+    field_values = Left(field_values, Len(field_values) - 2)
+    
+    qry = qry & " (" & field_names & ") Values (" & field_values & ")"
+    CreateInsertQuery = qry
+End Function
+
+Private Function ConvertValueToSqlQuery(prop_name As String, rec As Object, DbInfo As Object) As String
+    Dim v As Variant, field_type As ADOX.DataTypeEnum
     v = CallByName(rec, prop_name, VbGet)
-    If VarType(v) = vbString Then v = "'" & v & "'"
-    If VarType(v) = vbDate Then v = Format(v, "yyyy-MM-DD hh:mm:ss")
-    ConvertValueToSqlCode = v
+    field_type = DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)(prop_name)(EC_KEY_DB_FIELD_TYPE)
+    Select Case VarType(v)
+        Case vbEmpty:  v = "Null"
+        Case vbNull:   v = "Null"
+        Case vbString: v = "'" & v & "'"
+        Case vbDate
+            Select Case field_type
+                Case ADOX.DataTypeEnum.adDBDate: v = Format(v, "'yyyy-MM-dd'")
+                Case ADOX.DataTypeEnum.adDBTime: v = Format(v, "'hh:mm:ss'")
+                Case Else: v = Format(v, "'yyyy-MM-dd hh:mm:ss'")
+            End Select
+    End Select
+    
+    ConvertValueToSqlQuery = v
 End Function
 
 
@@ -562,6 +589,7 @@ Private Function GetEntityInfoByTableName(table_name_info As Collection) As Coll
 End Function
 
 
+
 Private Function SetEntityInfoRelatedColumns(ByRef entityInfos As Collection)
     Dim EntityInfo As Collection, col As ADOX.Column, ky As ADOX.Key, tbl As ADOX.Table, prop As Collection
     
@@ -595,7 +623,7 @@ Private Function GetPropertyInfoByColumn(col As ADOX.Column)
     Call prop.Add(propertyTypeName, EC_KEY_ENTITY_PROPERTY_TYPE)
     Call prop.Add(False, EC_KEY_ENTITY_IS_PROPERTY_RELATED)
     Call prop.Add(col, EC_KEY_ENTITY_ADOX_COLUMN)
-
+    
     Set GetPropertyInfoByColumn = prop
 End Function
 
@@ -604,7 +632,7 @@ Private Function GetIsAutoNumberField(col As ADOX.Column, table_name As String) 
     Dim qry As String
     
     If ProviderHasSchema Then
-        qry = "SELECT c.name AS ColumnName " & "FROM sys.columns c " & "INNER JOIN sys.tables t ON c.object_id = t.object_id " & "INNER JOIN sys.schemas s ON t.schema_id = s.schema_id " &
+        qry = "SELECT c.name AS ColumnName " & "FROM sys.columns c " & "INNER JOIN sys.tables t ON c.object_id = t.object_id " & "INNER JOIN sys.schemas s ON t.schema_id = s.schema_id " & _
              "WHERE t.name = '" & table_name & "' " & "AND s.name = '" & schemaName_ & "' " & "AND c.is_identity = 1;"
         GetIsAutoNumberField = Replace(cn_.Execute(qry).GetString(RowDelimeter:=","), ",", "") = col.Name
     Else
@@ -1020,7 +1048,7 @@ Private Function GetEntityPropertyTypeBy(col As ADOX.Column) As String
     fieldType = col.Type
     If col.Attributes >= adColNullable Then
         propertyTypeName = "Variant"
-    ElseIf fieldType = adInteger Then propertyTypeName = "Integer"
+    ElseIf fieldType = adInteger Then propertyTypeName = "Long"
     ElseIf fieldType = adSingle Then propertyTypeName = "Single"
     ElseIf fieldType = adDouble Then propertyTypeName = "Double"
     ElseIf fieldType = adCurrency Then propertyTypeName = "Currency"
@@ -1038,6 +1066,7 @@ Private Function GetEntityPropertyTypeBy(col As ADOX.Column) As String
     ElseIf fieldType = adLongVarChar Then propertyTypeName = "String"
     ElseIf fieldType = adVarWChar Then propertyTypeName = "String"
     ElseIf fieldType = adLongVarWChar Then propertyTypeName = "String"
+    ElseIf fieldType = adGUID Then propertyTypeName = "String"
     ElseIf fieldType = adLongVarBinary Then propertyTypeName = "Byte"
     Else
         Err.Raise 9100, "EntityContext.GetEntityPropertyTypeBy()", "field type is not supported."
@@ -1046,7 +1075,6 @@ Private Function GetEntityPropertyTypeBy(col As ADOX.Column) As String
     GetEntityPropertyTypeBy = propertyTypeName
 
 End Function
-
 
 
 
@@ -1059,7 +1087,7 @@ Private Function GetPropertyInfo(propertyFieldName, propertyName, propertyTypeNa
     Call prop.Add(isLet, "IsLet")
     Call prop.Add(fieldName, "DbFieldName")
     Call prop.Add(relatedfieldName, "ForeignKey")
-    Call prop.Add("", "PrimaryKey")
+    Call prop.Add("", EC_KEY_TABLE_PRIMARY_KEY)
     Set GetPropertyInfo = prop
 
 End Function

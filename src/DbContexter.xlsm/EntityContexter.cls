@@ -265,10 +265,8 @@ End Function
 
 Public Function Insert(rec As Object, DbInfo As Object)
     Dim rs As New ADODB.Recordset, fl, vl
-    Dim table_name As String, exceptional_field As String, exceptional_prop As Collection
+    Dim exceptional_field As String, exceptional_prop As Collection
         
-    table_name = GetTableNameByEntity(rec, DbInfo)
-    
     fl = GetFieldsListByEntity(rec, DbInfo)
     vl = GetValuesListByEntity(rec, DbInfo)
     
@@ -287,6 +285,7 @@ On Error GoTo errTrans
 errTrans:
     cn_.RollbackTrans
 errOpen:
+    If cn_.State <> adStateClosed Then Call cn_.Close
     Err.Raise Err.Number, Err.Source & vbCrLf & "EntityContexter.Insert()", Err.Description
 End Function
 

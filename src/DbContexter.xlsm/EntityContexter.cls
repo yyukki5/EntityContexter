@@ -74,7 +74,8 @@ End Sub
 
 Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, _
                                  Optional schema_name As String, _
-                                 Optional dbcontext_name As String = "DbContext" _
+                                 Optional dbcontext_name As String = "DbContext", _
+                                 Optional find_word As String = "" _
                                  ) As Collection
     Dim table_name As Collection, tableNames As New Collection, entityInfos As New Collection
     
@@ -85,7 +86,7 @@ Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, _
     schemaName_ = schema_name
     
     ' get table names
-    Set tableNames = GetTableNameFromDb()
+    Set tableNames = GetTableNameFromDb(find_word)
     
     ' create class module code from ADOX.catalog by table name
     For Each table_name In tableNames
@@ -442,7 +443,7 @@ Private Function FetchRecordSetByQuery(query_string As String) As ADODB.Recordse
     Call FetchRecordSetByQuery.Open(query_string, cn_, LockType:=adLockReadOnly)
 End Function
 
-Private Function GetTableNameFromDb() As Collection
+Private Function GetTableNameFromDb(Optional find_word As String = "") As Collection
     Dim tableNames As New Collection, sch As ADODB.Recordset, table_names As Collection
     
 On Error GoTo errLabel
@@ -452,6 +453,8 @@ On Error GoTo errLabel
     sch.MoveFirst
     Do Until sch.EOF
         Set table_names = New Collection
+        
+        If find_word <> "" And InStr(sch.Fields("TABLE_NAME").Value, find_word) = 0 Then GoTo next_loop
         
         If HasSchema Then
             If sch.Fields("TABLE_SCHEMA").Value = schemaName_ Then

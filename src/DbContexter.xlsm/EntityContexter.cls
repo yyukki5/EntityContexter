@@ -292,16 +292,17 @@ End Function
 Public Function Update(rec As Object, DbInfo As Object)
     Dim rs As New ADODB.Recordset, fl, vl
     
+    If HasPrimaryKey(rec, DbInfo) = False Then Call Err.Raise(10001, "EntityContexter.Update()", "Table has no primary key")
+    
     fl = GetFieldsListByEntity(rec, DbInfo)
     vl = GetValuesListByEntity(rec, DbInfo)
     
 On Error GoTo errOpen
     If cn_.State <> adStateOpen Then cn_.Open
-    Call rs.Open(Source:=GetTableNameByEntity(rec, DbInfo), ActiveConnection:=cn_, LockType:=adLockOptimistic)
+    Call rs.Open(Source:=CreateQueryForUpdate(rec, DbInfo), ActiveConnection:=cn_, LockType:=adLockOptimistic)
         
     Call cn_.BeginTrans
 On Error GoTo errTrans
-    Call MoveToRecord(rs, rec, DbInfo)
     Call rs.Update(fl, vl)
     Call rs.Close
     Call cn_.CommitTrans
@@ -398,6 +399,35 @@ Private Function SetAutoAutoincrementValues(rec As Object, DbInfo As Object, rs 
     Next
 End Function
 
+
+Private Function HasPrimaryKey(rec As Object, DbInfo As Object) As Boolean
+    
+    HasPrimaryKey = DbInfo(TypeName(rec))(EC_KEY_TABLE_PRIMARY_KEY) <> ""
+    
+End Function
+
+Private Function CreateQueryForUpdate(rec As Object, DbInfo As Object) As String
+    Dim table_name As String, key_prop_name As String, key_field_name As String, key_value As Variant
+    
+    table_name = GetTableNameByEntity(rec, DbInfo)
+    key_prop_name = GetPrimaryKeyPropertyByEntity(rec, DbInfo)
+    key_field_name = DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)(key_prop_name)(EC_KEY_DB_FIELD_NAME)
+    key_value = ConvertValueToSqlCode(key_prop_name, rec, DbInfo)
+    
+    CreateQueryForUpdate = "Select * From " & table_name & " Where " & key_field_name & " = " & key_value
+    
+End Function
+
+Private Function ConvertValueToSqlCode(prop_name As String, rec As Object, DbInfo As Object) As String
+    ' todo, convert value to sql code using by dbtype
+    Dim v As Variant
+    v = CallByName(rec, prop_name, VbGet)
+    If VarType(v) = vbString Then v = "'" & v & "'"
+    If VarType(v) = vbDate Then v = Format(v, "yyyy-MM-DD hh:mm:ss")
+    ConvertValueToSqlCode = v
+End Function
+
+
 Private Function GetTableNameByEntity(rec As Object, DbInfo As Object) As String
     Dim table_name As String, info As Collection
     
@@ -408,11 +438,11 @@ Private Function GetTableNameByEntity(rec As Object, DbInfo As Object) As String
     GetTableNameByEntity = table_name
 End Function
 
-Private Function GetPrimaryKeyByEntity(rec As Object, DbInfo As Object) As String
-    Dim info As Collection
+Private Function GetPrimaryKeyPropertyByEntity(rec As Object, DbInfo As Object) As String
+    Dim prop As Collection
     
-    For Each info In DbInfo
-        If info("EntityClassName") = TypeName(rec) Then GetPrimaryKeyByEntity = info("PrimaryKey")
+    For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
+        If prop(EC_KEY_DB_FIELD_NAME) = DbInfo(TypeName(rec))(EC_KEY_TABLE_PRIMARY_KEY) Then GetPrimaryKeyPropertyByEntity = prop(EC_KEY_ENTITY_PROPERTY_NAME)
     Next
     
 End Function

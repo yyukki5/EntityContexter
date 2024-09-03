@@ -440,7 +440,8 @@ End Property
 Private Function FetchRecordSetByQuery(query_string As String) As ADODB.Recordset
     If cn_.State <> adStateOpen Then cn_.Open
     Set FetchRecordSetByQuery = New ADODB.Recordset
-    Call FetchRecordSetByQuery.Open(query_string, cn_, LockType:=adLockReadOnly)
+    FetchRecordSetByQuery.CursorLocation = adUseClient
+    Call FetchRecordSetByQuery.Open(query_string, cn_, LockType:=adLockReadOnly, CursorType:=adOpenStatic)
 End Function
 
 Private Function GetTableNameFromDb(Optional find_word As String = "") As Collection
@@ -471,6 +472,7 @@ On Error GoTo errLabel
                 Call tableNames.Add(table_names)
             End If
         End If
+next_loop:
         sch.MoveNext
     Loop
     Set GetTableNameFromDb = tableNames

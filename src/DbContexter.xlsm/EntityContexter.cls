@@ -227,23 +227,10 @@ Public Function FetchRecords(entity_name As String, DbInfo As Object, dbc As Obj
         For Each prop In props
             If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Then
                 
-                fkey = prop(EC_KEY_ENTITY_FOREIGNKEY)
-                kyfld = rs.Fields(prop(EC_KEY_DB_FIELD_NAME)).Value
+                fkey = prop(EC_KEY_DB_FIELD_NAME)
+                kyfld = rs.Fields(prop(EC_KEY_ENTITY_FOREIGNKEY)).Value
                 foreign_table_name = prop(EC_KEY_ENTITY_FOREIGN_TABLE)
-                ent_name = prop(EC_KEY_ENTITY_FOREIGN_TABLE) ' todo
-                
-                qry1 = "SELECT * FROM " & foreign_table_name & " WHERE " & fkey & " = " & kyfld
-                Set tbls = FetchRecords((ent_name), DbInfo, dbc, cnt + 1, (qry1))
-                
-                property_name = prop(EC_KEY_ENTITY_PROPERTY_NAME)
-                If (tbls Is Nothing) = False Then Call CallByName(T, property_name, VbSet, tbls.Item(1))
-            
-            ElseIf prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
-                
-                fkey = prop(EC_KEY_ENTITY_INVERSE_FOREIGNKEY)
-                kyfld = rs.Fields(prop(EC_KEY_DB_FIELD_NAME)).Value
-                foreign_table_name = prop(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE)
-                ent_name = prop(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE) ' todo
+                ent_name = prop(EC_KEY_ENTITY_FOREIGN_TABLE)           ' todo
                 
                 qry1 = "SELECT * FROM " & ent_name & " WHERE " & fkey & " = " & kyfld
                 Set tbls = FetchRecords((ent_name), DbInfo, dbc, cnt + 1, (qry1))
@@ -251,9 +238,22 @@ Public Function FetchRecords(entity_name As String, DbInfo As Object, dbc As Obj
                 property_name = prop(EC_KEY_ENTITY_PROPERTY_NAME)
                 If (tbls Is Nothing) = False Then Call CallByName(CallByName(T, property_name, VbGet), "Items", VbSet, tbls)
             
+            ElseIf prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
+                
+                fkey = prop(EC_KEY_DB_FIELD_NAME)
+                kyfld = rs.Fields(prop(EC_KEY_DB_FIELD_NAME)).Value
+                foreign_table_name = prop(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE)
+                ent_name = prop(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE)           ' todo
+                
+                qry1 = "SELECT * FROM " & foreign_table_name & " WHERE " & fkey & " = " & kyfld
+                Set tbls = FetchRecords((ent_name), DbInfo, dbc, cnt + 1, (qry1))
+                
+                property_name = prop(EC_KEY_ENTITY_PROPERTY_NAME)
+                If (tbls Is Nothing) = False Then Call CallByName(T, property_name, VbSet, tbls.Item(1))
+            
             Else
                 property_name = prop(EC_KEY_ENTITY_PROPERTY_NAME)
-                Call CallByName(T, property_name, VbLet, rs.Fields(prop(EC_KEY_DB_FIELD_NAME)))
+                Call CallByName(T, property_name, VbLet, rs.Fields(prop(EC_KEY_DB_FIELD_NAME)).Value)
             End If
         Next
         Items.Add T

@@ -110,19 +110,19 @@ Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, _
 End Function
 
 Public Function CreateDbInfoBy( _
-    Optional table_name, _
-    Optional sql_table_name, _
-    Optional entity_name, _
-    Optional entities_name, _
-    Optional primary_key)
+    Optional table_name As String, _
+    Optional sql_table_name As String, _
+    Optional entity_name As String, _
+    Optional entities_name As String, _
+    Optional primary_key As String)
     Dim info As Collection
     
     Set info = New Collection
-    If IsMissing(table_name) = False Then Call info.Add(table_name, EC_KEY_DB_TABLE_NAME)
-    If IsMissing(sql_table_name) = False Then Call info.Add(sql_table_name, EC_KEY_SQL_TABLE_NAME)
-    If IsMissing(entity_name) = False Then Call info.Add(entity_name, EC_KEY_ENTITY_NAME)
-    If IsMissing(entities_name) = False Then Call info.Add(entities_name, EC_KEY_ENTITIES_NAME)
-    If IsMissing(primary_key) = False Then Call info.Add(primary_key, "PrimaryKey")
+    Call info.Add(table_name, EC_KEY_DB_TABLE_NAME)
+    Call info.Add(sql_table_name, EC_KEY_SQL_TABLE_NAME)
+    Call info.Add(entity_name, EC_KEY_ENTITY_NAME)
+    Call info.Add(entities_name, EC_KEY_ENTITIES_NAME)
+    Call info.Add(primary_key, EC_KEY_TABLE_PRIMARY_KEY)
     
     Set CreateDbInfoBy = info
 End Function

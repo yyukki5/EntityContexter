@@ -357,10 +357,9 @@ Private Sub MoveToRecord(rs As ADODB.Recordset, rec As Object, DbInfo As Collect
 End Sub
 
 Private Function GetValuesListByEntity(rec As Object, DbInfo As Object)
-    Dim i As Long, value_list, table_name As String, props As Collection, prop As Collection, col As New Collection
+    Dim i As Long, value_list, props As Collection, prop As Collection, col As New Collection
         
-    table_name = GetTableNameByEntity(rec, DbInfo)
-    Set props = DbInfo(table_name)(EC_KEY_ENTITY_PROPERTIES)
+    Set props = DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
     
     For Each prop In props
         If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
@@ -372,29 +371,11 @@ Private Function GetValuesListByEntity(rec As Object, DbInfo As Object)
 
 End Function
 
-Private Function SetAutoAutoincrementValues(rec As Object, DbInfo As Object, rs As ADODB.Recordset)
-    Dim i As Long, table_name As String, prop As Collection
-    
-    table_name = GetTableNameByEntity(rec, DbInfo)
-    i = 0
-    For Each prop In DbInfo(table_name)(EC_KEY_ENTITY_PROPERTIES)
-        i = i + 1
-        If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
-        Else
-            If prop(EC_KEY_DB_AUTOINCREMENT) = True Then
-                Call CallByName(rec, prop(EC_KEY_ENTITY_PROPERTY_NAME), VbLet, rs.Fields(prop(EC_KEY_DB_FIELD_NAME)).Value)
-            End If
-        End If
-    Next
-End Function
-
-
 Private Function GetFieldsListByEntity(rec As Object, DbInfo As Object)
-    Dim i As Long, value_list, table_name As String, props As Collection, prop As Collection, col As New Collection
+    Dim i As Long, value_list, props As Collection, prop As Collection, col As New Collection
         
-    table_name = GetTableNameByEntity(rec, DbInfo)
-    Set props = DbInfo(table_name)(EC_KEY_ENTITY_PROPERTIES)
-        
+    Set props = DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
+    
     For Each prop In props
         If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
         Else
@@ -405,11 +386,26 @@ Private Function GetFieldsListByEntity(rec As Object, DbInfo As Object)
         
 End Function
 
+Private Function SetAutoAutoincrementValues(rec As Object, DbInfo As Object, rs As ADODB.Recordset)
+    Dim i As Long, prop As Collection
+        
+    i = 0
+    For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
+        i = i + 1
+        If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
+        Else
+            If prop(EC_KEY_DB_AUTOINCREMENT) = True Then
+                Call CallByName(rec, prop(EC_KEY_ENTITY_PROPERTY_NAME), VbLet, rs.Fields(prop(EC_KEY_DB_FIELD_NAME)).Value)
+            End If
+        End If
+    Next
+End Function
+
 Private Function GetTableNameByEntity(rec As Object, DbInfo As Object) As String
     Dim table_name As String, info As Collection
     
     For Each info In DbInfo
-        If info(EC_KEY_ENTITY_NAME) = TypeName(rec) Then table_name = info(EC_KEY_DB_TABLE_NAME)
+        If info(EC_KEY_ENTITY_NAME) = TypeName(rec) Then table_name = info(EC_KEY_SQL_TABLE_NAME)
     Next
     
     GetTableNameByEntity = table_name

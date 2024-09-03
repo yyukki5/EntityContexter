@@ -317,21 +317,19 @@ End Function
 Public Function Delete(rec As Object, DbInfo As Object)
     Dim rs As New ADODB.Recordset
     
+    If HasPrimaryKey(rec, DbInfo) = False Then Call Err.Raise(10001, "EntityContexter.Update()", "Table has no primary key")
+    
 On Error GoTo errOpen
     If cn_.State <> adStateOpen Then cn_.Open
-    Call rs.Open(Source:=GetTableNameByEntity(rec, DbInfo), ActiveConnection:=cn_, LockType:=adLockOptimistic)
         
     Call cn_.BeginTrans
 On Error GoTo errTrans
-    Call MoveToRecord(rs, rec, DbInfo)
-    Call rs.Delete(adAffectCurrent)
-    Call rs.Close
+    Call cn_.Execute(CommandText:=CreateDeleteQuery(rec, DbInfo))
     Call cn_.CommitTrans
     Exit Function
 
 errTrans:
     cn_.RollbackTrans
-    If rs.State <> adStateClosed Then Call rs.Close
 errOpen:
     Err.Raise Err.Number, Err.Source & vbCrLf & "EntityContexter.Delete()", Err.Description
 End Function
@@ -405,6 +403,20 @@ Private Function HasPrimaryKey(rec As Object, DbInfo As Object) As Boolean
     HasPrimaryKey = DbInfo(TypeName(rec))(EC_KEY_TABLE_PRIMARY_KEY) <> ""
     
 End Function
+
+Private Function CreateDeleteQuery(rec As Object, DbInfo As Object) As String
+    Dim table_name As String, key_prop_name As String, key_field_name As String, key_value As Variant
+    
+    ' todo update to delete related table's record by using inner join.
+    table_name = GetTableNameByEntity(rec, DbInfo)
+    key_prop_name = GetPrimaryKeyPropertyByEntity(rec, DbInfo)
+    key_field_name = DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)(key_prop_name)(EC_KEY_DB_FIELD_NAME)
+    key_value = ConvertValueToSqlCode(key_prop_name, rec, DbInfo)
+    
+    CreateDeleteQuery = "Delete From " & table_name & " Where " & key_field_name & " = " & key_value
+    
+End Function
+
 
 Private Function CreateQueryForUpdate(rec As Object, DbInfo As Object) As String
     Dim table_name As String, key_prop_name As String, key_field_name As String, key_value As Variant

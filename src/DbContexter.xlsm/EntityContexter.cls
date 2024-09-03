@@ -74,7 +74,7 @@ End Sub
 
 
 Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, _
-                                 Optional schema_name As String, _
+                                 Optional schema_name As String = "dbo", _
                                  Optional dbcontext_name As String = "DbContext", _
                                  Optional find_word As String = "" _
                                  ) As Collection
@@ -469,8 +469,8 @@ Private Function GetDBInfoPropertyByFieldName(field_name As String, table_name A
     
 End Function
 
-Private Property Get HasSchema() As Boolean
-    HasSchema = schemaName_ <> ""
+Private Property Get ProviderHasSchema() As Boolean
+    ProviderHasSchema = InStr(cn_.PROVIDER, "SQLOLEDB") > 0
 End Property
 
 
@@ -496,7 +496,7 @@ On Error GoTo errLabel
         
         If find_word <> "" And InStr(sch.Fields("TABLE_NAME").Value, find_word) = 0 Then GoTo next_loop
         
-        If HasSchema Then
+        If ProviderHasSchema Then
             If sch.Fields("TABLE_SCHEMA").Value = schemaName_ Then
                 Call table_names.Add(sch.Fields("TABLE_NAME").Value, EC_KEY_DB_TABLE_NAME)
                 Call table_names.Add(ConvertToSqlTableNameBy(sch.Fields("TABLE_NAME").Value, schemaName_), EC_KEY_SQL_TABLE_NAME)

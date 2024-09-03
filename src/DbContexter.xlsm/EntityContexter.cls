@@ -127,38 +127,36 @@ Public Function CreateDbInfoBy( _
     Set CreateDbInfoBy = info
 End Function
 
-Public Function CreateDbInfoPropertyBy(Optional property_name, _
-    Optional entity_field_name, _
-    Optional entity_property_type, _
-    Optional db_table_name, _
-    Optional db_field_name, _
-    Optional auto_increment, _
-    Optional foreign_key, _
-    Optional foreign_table, _
-    Optional inverse_foreign_key, _
-    Optional inverse_foreign_table _
+Public Function CreateDbInfoPropertyBy( _
+    Optional property_name As String, _
+    Optional entity_field_name As String, _
+    Optional entity_property_type As String, _
+    Optional db_table_name As String, _
+    Optional db_field_name As String, _
+    Optional auto_increment As Boolean = False, _
+    Optional foreign_key As String, _
+    Optional foreign_table As String, _
+    Optional inverse_foreign_key As String, _
+    Optional inverse_foreign_table As String _
     )
     Dim prop As Collection
     
     Set prop = New Collection
-    If IsMissing(property_name) = False Then Call prop.Add(property_name, EC_KEY_ENTITY_PROPERTY_NAME)
-    If IsMissing(entity_field_name) = False Then Call prop.Add(entity_field_name, EC_KEY_ENTITY_FIELD_NAME)
-    If IsMissing(entity_property_type) = False Then Call prop.Add(entity_property_type, EC_KEY_ENTITY_PROPERTY_TYPE)
-    If IsMissing(db_table_name) = False Then Call prop.Add(db_table_name, EC_KEY_DB_TABLE_NAME)
-    If IsMissing(db_field_name) = False Then Call prop.Add(db_field_name, EC_KEY_DB_FIELD_NAME)
-    If IsMissing(auto_increment) = False Then Call prop.Add(auto_increment, EC_KEY_DB_AUTOINCREMENT)
-    If IsMissing(foreign_key) Then
-        Call prop.Add(False, EC_KEY_ENTITY_EXIST_FOREIGNKEY)
-    ElseIf foreign_key <> "" Then
+    Call prop.Add(property_name, EC_KEY_ENTITY_PROPERTY_NAME)
+    Call prop.Add(entity_field_name, EC_KEY_ENTITY_FIELD_NAME)
+    Call prop.Add(entity_property_type, EC_KEY_ENTITY_PROPERTY_TYPE)
+    Call prop.Add(db_table_name, EC_KEY_DB_TABLE_NAME)
+    Call prop.Add(db_field_name, EC_KEY_DB_FIELD_NAME)
+    Call prop.Add(auto_increment, EC_KEY_DB_AUTOINCREMENT)
+    
+    If foreign_key <> "" Then
         Call prop.Add(True, EC_KEY_ENTITY_EXIST_FOREIGNKEY)
         Call prop.Add(foreign_key, EC_KEY_ENTITY_FOREIGNKEY)
         Call prop.Add(foreign_table, EC_KEY_ENTITY_FOREIGN_TABLE)
     Else
         Call prop.Add(False, EC_KEY_ENTITY_EXIST_FOREIGNKEY)
     End If
-    If IsMissing(inverse_foreign_key) Then
-        Call prop.Add(False, EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY)
-    ElseIf inverse_foreign_key <> "" Then
+    If inverse_foreign_key <> "" Then
         Call prop.Add(True, EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY)
         Call prop.Add(inverse_foreign_key, EC_KEY_ENTITY_INVERSE_FOREIGNKEY)
         Call prop.Add(inverse_foreign_table, EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE)

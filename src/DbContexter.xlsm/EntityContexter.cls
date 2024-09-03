@@ -546,7 +546,8 @@ Private Function GetEntityInfoByTableName(table_name_info As Collection) As Coll
     table_name = table_name_info(EC_KEY_DB_TABLE_NAME)
     Set tbl = catalog_.Tables(table_name)
     For Each col In tbl.Columns
-        Set prop = GetPropertyInfoByTable(col)
+        Set prop = GetPropertyInfoByColumn(col)
+        Call prop.Add(GetIsAutoNumberField(col, tbl.Name), EC_KEY_DB_AUTOINCREMENT)
         Call props.Add(prop, prop(EC_KEY_ENTITY_PROPERTY_NAME))
     Next
     
@@ -581,7 +582,7 @@ Private Function SetEntityInfoRelatedColumns(ByRef entityInfos As Collection)
     
 End Function
 
-Private Function GetPropertyInfoByTable(col As ADOX.Column)
+Private Function GetPropertyInfoByColumn(col As ADOX.Column)
     Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
 
     propertyName = ConvertDbFieldNameToClassPropertyName(col.Name)
@@ -595,8 +596,23 @@ Private Function GetPropertyInfoByTable(col As ADOX.Column)
     Call prop.Add(False, EC_KEY_ENTITY_IS_PROPERTY_RELATED)
     Call prop.Add(col, EC_KEY_ENTITY_ADOX_COLUMN)
 
-    Set GetPropertyInfoByTable = prop
+    Set GetPropertyInfoByColumn = prop
 End Function
+
+
+Private Function GetIsAutoNumberField(col As ADOX.Column, table_name As String) As Boolean
+    Dim qry As String
+    
+    If ProviderHasSchema Then
+        qry = "SELECT c.name AS ColumnName " & "FROM sys.columns c " & "INNER JOIN sys.tables t ON c.object_id = t.object_id " & "INNER JOIN sys.schemas s ON t.schema_id = s.schema_id " &
+             "WHERE t.name = '" & table_name & "' " & "AND s.name = '" & schemaName_ & "' " & "AND c.is_identity = 1;"
+        GetIsAutoNumberField = Replace(cn_.Execute(qry).GetString(RowDelimeter:=","), ",", "") = col.Name
+    Else
+        GetIsAutoNumberField = col.Properties(EC_KEY_DB_AUTOINCREMENT)
+    End If
+    
+End Function
+
 
 Private Function GetPropertyInfoByForeignKey(key_table_name As String, col As ADOX.Column)
     Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
@@ -844,7 +860,7 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
                 tmp = tmp & ", entity_field_name:=""" & prop(EC_KEY_ENTITY_FIELD_NAME) & """"
                 tmp = tmp & ", entity_property_type:=""" & prop(EC_KEY_ENTITY_PROPERTY_TYPE) & """"
                 tmp = tmp & ", db_field_name:=""" & prop(EC_KEY_ENTITY_ADOX_COLUMN).Name & """"
-                tmp = tmp & ", auto_increment:=" & prop(EC_KEY_ENTITY_ADOX_COLUMN).Properties(EC_KEY_DB_AUTOINCREMENT)
+                tmp = tmp & IIf(prop(EC_KEY_DB_AUTOINCREMENT), ", auto_increment:=" & prop(EC_KEY_DB_AUTOINCREMENT), "")
                 tmp = tmp & ", foreign_key:=""" & prop(EC_KEY_ENTITY_FOREIGNKEY) & """"
                 tmp = tmp & ", foreign_table:=""" & prop(EC_KEY_ENTITY_FOREIGN_TABLE) & """"
                 tmp = tmp & ", inverse_foreign_key:=""" & prop(EC_KEY_ENTITY_INVERSE_FOREIGNKEY) & """"

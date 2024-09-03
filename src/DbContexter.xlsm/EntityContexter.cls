@@ -526,9 +526,9 @@ Private Function SetEntityInfoRelatedColumns(ByRef entityInfos As Collection)
             If ky.Type <> adKeyForeign Then
             Else
                 For Each col In ky.Columns
-                    Set prop = GetPropertyInfoByForeignKey(ky.RelatedTable, col)
+                    Set prop = GetPropertyInfoByInverseProperty(ky.RelatedTable, col)
                     Call EntityInfo(EC_KEY_ENTITY_PROPERTIES).Add(prop, prop(EC_KEY_ENTITY_PROPERTY_NAME))
-                    Set prop = GetPropertyInfoByInverseProperty(tbl.Name, col)
+                    Set prop = GetPropertyInfoByForeignKey(tbl.Name, col)
                     Call entityInfos(ky.RelatedTable).Item(EC_KEY_ENTITY_PROPERTIES).Add(prop, prop(EC_KEY_ENTITY_PROPERTY_NAME))
                 Next
             End If
@@ -557,8 +557,8 @@ End Function
 Private Function GetPropertyInfoByForeignKey(key_table_name As String, col As ADOX.Column)
     Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
                 
-    propertyName = ConvertDbTableNameToEntityClassName(key_table_name)
-    propertyFieldName = ConvertDBFieldNameToClassFieldName(key_table_name)
+    propertyName = ConvertDbTableNameToEntitesClassName(key_table_name)
+    propertyFieldName = ConvertDbTableNameToEntitiesClassFieldName(key_table_name)
     propertyTypeName = propertyName
     
     Dim prop As New Collection
@@ -579,8 +579,8 @@ End Function
 Private Function GetPropertyInfoByInverseProperty(key_table_name As String, col As ADOX.Column)
     Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
 
-    propertyName = ConvertDbTableNameToEntitesClassName(key_table_name)
-    propertyFieldName = ConvertDbTableNameToEntitiesClassFieldName(key_table_name)
+    propertyName = ConvertDbTableNameToEntityClassName(key_table_name)
+    propertyFieldName = ConvertDBFieldNameToClassFieldName(key_table_name)
     propertyTypeName = propertyName
     
     Dim prop As New Collection

@@ -336,11 +336,10 @@ errOpen:
 End Function
 
 Private Sub MoveToRecord(rs As ADODB.Recordset, rec As Object, DbInfo As Collection)
-    Dim index_field As String, index_value, table_name As String, prop As Collection
+    Dim index_field As String, index_value, prop As Collection
 
-    table_name = GetTableNameByEntity(rec, DbInfo)
-    index_field = DbInfo(table_name)("PrimaryKey")
-    For Each prop In DbInfo(table_name)(EC_KEY_ENTITY_PROPERTIES)
+    index_field = DbInfo(TypeName(rec))(EC_KEY_TABLE_PRIMARY_KEY)
+    For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
         If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
         Else
             If prop(EC_KEY_DB_FIELD_NAME) = index_field Then index_value = CallByName(rec, prop(EC_KEY_ENTITY_PROPERTY_NAME), VbGet)

@@ -269,13 +269,17 @@ End Function
 
 Public Function Insert(rec As Object, DbInfo As Object)
     Dim rs As New ADODB.Recordset, prop As Collection
-                                
+                                    
 On Error GoTo errOpen
     If cn_.State <> adStateOpen Then cn_.Open
+    cn_.CursorLocation = adUseClient
+    If HasPrimaryKey(rec, DbInfo) = False Then If ExistUniqueRecord(rec, DbInfo) Then Call Err.Raise(10003, "EntityContexter.Insert()", "Record is already exist")
+    
     Call cn_.BeginTrans
 On Error GoTo errTrans
-    Call cn_.Execute(CommandText:=CreateInsertQuery(rec, DbInfo))
-    Call SetMaxValueToAutoincrementFields(rec, DbInfo)
+    Call rs.Open(Source:=DbInfo(TypeName(rec))(EC_KEY_SQL_TABLE_NAME), ActiveConnection:=cn_, LockType:=adLockOptimistic)
+    Call rs.AddNew(GetFieldsListByEntity(rec, DbInfo), GetValuesListByEntity(rec, DbInfo))
+    Call SetAutoincrementFieldsValues(rs, rec, DbInfo)
     Call cn_.CommitTrans
     Exit Function
 
@@ -286,12 +290,42 @@ errOpen:
     Err.Raise Err.Number, Err.Source & vbCrLf & "EntityContexter.Insert()", Err.Description
 End Function
 
-Public Function Update(rec As Object, DbInfo As Object)
+Private Function GetValuesListByEntity(rec As Object, DbInfo As Object)
+    Dim prop As Collection, col As New Collection
     
-    If HasPrimaryKey(rec, DbInfo) = False Then Call Err.Raise(10001, "EntityContexter.Update()", "Table has no primary key")
+    For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
+        If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
+        Else
+            If prop(EC_KEY_DB_AUTOINCREMENT) = False Then col.Add CallByName(rec, prop(EC_KEY_ENTITY_PROPERTY_NAME), VbGet)
+        End If
+    Next
+    GetValuesListByEntity = CollectionToArray(col)
+
+End Function
+
+Private Function GetFieldsListByEntity(rec As Object, DbInfo As Object)
+    Dim prop As Collection, col As New Collection
+
+
+    For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
+        If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
+        Else
+            If prop(EC_KEY_DB_AUTOINCREMENT) = False Then col.Add prop(EC_KEY_DB_FIELD_NAME)
+        End If
+    Next
+    GetFieldsListByEntity = CollectionToArray(col)
+
+End Function
+
+
+Public Function Update(rec As Object, DbInfo As Object)
     
 On Error GoTo errOpen
     If cn_.State <> adStateOpen Then cn_.Open
+    cn_.CursorLocation = adUseClient
+    If HasPrimaryKey(rec, DbInfo) = False Then Call Err.Raise(10001, "EntityContexter.Update()", "Table has no primary key")
+    If ExistUniqueRecord(rec, DbInfo) = False Then Call Err.Raise(10002, "EntityContexter.Update()", "Not found records")
+    
     Call cn_.BeginTrans
 On Error GoTo errTrans
     Call cn_.Execute(CommandText:=CreateUpdateQuery(rec, DbInfo))
@@ -306,10 +340,12 @@ End Function
 
 Public Function Delete(rec As Object, DbInfo As Object)
     
-    If HasPrimaryKey(rec, DbInfo) = False Then Call Err.Raise(10001, "EntityContexter.Delete()", "Table has no primary key")
-    
 On Error GoTo errOpen
     If cn_.State <> adStateOpen Then cn_.Open
+    cn_.CursorLocation = adUseClient
+    If HasPrimaryKey(rec, DbInfo) = False Then Call Err.Raise(10001, "EntityContexter.Delete()", "Table has no primary key")
+    If ExistUniqueRecord(rec, DbInfo) = False Then Call Err.Raise(10002, "EntityContexter.Delete()", "Not found records")
+    
     Call cn_.BeginTrans
 On Error GoTo errTrans
     Call cn_.Execute(CommandText:=CreateDeleteQuery(rec, DbInfo))
@@ -340,90 +376,74 @@ Private Sub MoveToRecord(rs As ADODB.Recordset, rec As Object, DbInfo As Collect
     Loop
 End Sub
 
-Private Function GetValuesListByEntity(rec As Object, DbInfo As Object)
-    Dim i As Long, value_list, props As Collection, prop As Collection, col As New Collection
-        
-    Set props = DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
-    
-    For Each prop In props
-        If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
-        Else
-            'If prop(EC_KEY_DB_AUTOINCREMENT) = False Then col.Add CallByName(rec, prop(EC_KEY_ENTITY_PROPERTY_NAME), VbGet)
-            If prop(EC_KEY_DB_AUTOINCREMENT) = False Then col.Add ConvertValueToSqlQuery(prop(EC_KEY_ENTITY_PROPERTY_NAME), rec, DbInfo)
-        End If
-    Next
-    GetValuesListByEntity = CollectionToArray(col)
+Private Function SetAutoincrementFieldsValues(rs As ADODB.Recordset, rec As Object, DbInfo As Object)
+    Dim prop As Collection
 
-End Function
-
-Private Function GetFieldsListByEntity(rec As Object, DbInfo As Object)
-    Dim i As Long, value_list, props As Collection, prop As Collection, col As New Collection
-        
-    Set props = DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
-        
-    For Each prop In props
-        If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
-        Else
-            If prop(EC_KEY_DB_AUTOINCREMENT) = False Then col.Add prop(EC_KEY_DB_FIELD_NAME)
-        End If
-    Next
-    GetFieldsListByEntity = CollectionToArray(col)
-        
-End Function
-
-Private Function SetMaxValueToAutoincrementFields(rec As Object, DbInfo As Object)
-    Dim i As Long, prop As Collection
-    
-    i = 0
     For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
-        i = i + 1
-        If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
-        Else
-            If prop(EC_KEY_DB_AUTOINCREMENT) = True Then
-                Call CallByName(rec, prop(EC_KEY_ENTITY_PROPERTY_NAME), VbLet, _
-                    cn_.Execute("Select Max(" & prop(EC_KEY_DB_FIELD_NAME) & ") From " & DbInfo(TypeName(rec))(EC_KEY_SQL_TABLE_NAME)).Fields(0).Value)
-            End If
-        End If
+        If prop(EC_KEY_DB_AUTOINCREMENT) = True Then _
+            Call CallByName(rec, prop(EC_KEY_ENTITY_PROPERTY_NAME), VbLet, rs.Fields(prop(EC_KEY_DB_FIELD_NAME)).Value)
     Next
 End Function
 
 Private Function HasPrimaryKey(rec As Object, DbInfo As Object) As Boolean
+    Dim ind As ADOX.Index
     
-    HasPrimaryKey = DbInfo(TypeName(rec))(EC_KEY_TABLE_PRIMARY_KEY) <> ""
-    
+    Set catalog_.ActiveConnection = cn_
+    For Each ind In catalog_.Tables(DbInfo(TypeName(rec))(EC_KEY_DB_TABLE_NAME)).Indexes
+        If ind.PrimaryKey Then HasPrimaryKey = True: Exit Function
+    Next
+       
 End Function
+
+Private Function ExistUniqueRecord(rec As Object, DbInfos As Object) As Boolean
+    Dim qry As String
+    qry = "select * from " & DbInfos(TypeName(rec))(EC_KEY_SQL_TABLE_NAME) & GetQueryPrimaryWhere(rec, DbInfos)
+    ExistUniqueRecord = cn_.Execute(CommandText:=qry).RecordCount = 1
+End Function
+
+Private Function GetQueryPrimaryWhere(rec As Object, DbInfos As Object) As String
+    Dim qry As String, ind As ADOX.Index, col As ADOX.Column
+    
+    Set catalog_.ActiveConnection = cn_
+    qry = " Where "
+    For Each ind In catalog_.Tables(DbInfos(TypeName(rec))(EC_KEY_DB_TABLE_NAME)).Indexes
+        If ind.PrimaryKey Then
+            For Each col In ind.Columns
+                qry = qry & "[" & col.Name & "] = " & ConvertValueToSqlQuery(GetDbInfoPropertyByFieldName(col.Name, TypeName(rec), DbInfos)(EC_KEY_ENTITY_PROPERTY_NAME), rec, DbInfos) & ", "
+            Next
+        End If
+    Next
+    qry = Left(qry, Len(qry) - 2)
+    
+    GetQueryPrimaryWhere = qry
+End Function
+
+Private Function GetPropByColumnName()
+
+End Function
+
+
 
 Private Function CreateDeleteQuery(rec As Object, DbInfo As Object) As String
     Dim table_name As String, key_prop_name As String, key_field_name As String, key_value As Variant
     
     ' todo update to delete related table's record by using inner join.
-    table_name = GetTableNameByEntity(rec, DbInfo)
-    key_prop_name = GetPrimaryKeyPropertyByEntity(rec, DbInfo)
-    key_field_name = DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)(key_prop_name)(EC_KEY_DB_FIELD_NAME)
-    key_value = ConvertValueToSqlQuery(key_prop_name, rec, DbInfo)
-    
-    CreateDeleteQuery = "Delete From " & table_name & " Where " & key_field_name & " = " & key_value
+    CreateDeleteQuery = "Delete From " & DbInfo(TypeName(rec))(EC_KEY_SQL_TABLE_NAME) & GetQueryPrimaryWhere(rec, DbInfo)
     
 End Function
 
 Private Function CreateUpdateQuery(rec As Object, DbInfo As Object) As String
     Dim table_name As String, key_prop_name As String, key_field_name As String, key_value As Variant, qry As String, prop As Collection
     
-    table_name = GetTableNameByEntity(rec, DbInfo)
-    key_prop_name = GetPrimaryKeyPropertyByEntity(rec, DbInfo)
-    key_field_name = DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)(key_prop_name)(EC_KEY_DB_FIELD_NAME)
-    key_value = ConvertValueToSqlQuery(key_prop_name, rec, DbInfo)
-    
     qry = "Update " & DbInfo(TypeName(rec))(EC_KEY_SQL_TABLE_NAME) & " set "
     For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
         If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
         Else
             If prop(EC_KEY_DB_AUTOINCREMENT) = False Then _
-                qry = qry & prop(EC_KEY_DB_FIELD_NAME) & " = " & ConvertValueToSqlQuery((prop(EC_KEY_ENTITY_PROPERTY_NAME)), rec, DbInfo) & ", "
+                qry = qry & "[" & prop(EC_KEY_DB_FIELD_NAME) & "] = " & ConvertValueToSqlQuery((prop(EC_KEY_ENTITY_PROPERTY_NAME)), rec, DbInfo) & ", "
         End If
     Next
-    qry = Left(qry, Len(qry) - 2)
-    qry = qry & " Where " & key_field_name & " = " & key_value
+    qry = Left(qry, Len(qry) - 2) & GetQueryPrimaryWhere(rec, DbInfo)
     
     CreateUpdateQuery = qry
 End Function
@@ -487,11 +507,11 @@ Private Function GetPrimaryKeyPropertyByEntity(rec As Object, DbInfo As Object) 
     
 End Function
 
-Private Function GetDBInfoPropertyByFieldName(field_name As String, table_name As String, DbInfo As Object) As Collection
+Private Function GetDbInfoPropertyByFieldName(field_name As String, entity_name As String, DbInfos As Object) As Collection
     Dim prop As Collection
     
-    For Each prop In DbInfo(table_name)("Properties")
-        If prop("DbFieldName") = field_name Then Set GetDBInfoPropertyByFieldName = prop
+    For Each prop In DbInfos(entity_name)(EC_KEY_ENTITY_PROPERTIES)
+        If prop(EC_KEY_DB_FIELD_NAME) = field_name Then Set GetDbInfoPropertyByFieldName = prop
     Next
     
 End Function
@@ -588,6 +608,10 @@ Private Function GetEntityInfoByTableName(table_name_info As Collection) As Coll
     Set GetEntityInfoByTableName = entity_info
 End Function
 
+
+Private Function GetIsPrimaryKey()
+
+End Function
 
 
 Private Function SetEntityInfoRelatedColumns(ByRef entityInfos As Collection)
@@ -885,7 +909,6 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
             For Each prop In info("Properties")
                 tmp = "    Set prop = ec_.CreateDbInfoPropertyBy("
                 tmp = tmp & "  property_name:=""" & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """"
-                tmp = tmp & ", entity_field_name:=""" & prop(EC_KEY_ENTITY_FIELD_NAME) & """"
                 tmp = tmp & ", entity_property_type:=""" & prop(EC_KEY_ENTITY_PROPERTY_TYPE) & """"
                 tmp = tmp & ", db_field_name:=""" & prop(EC_KEY_ENTITY_ADOX_COLUMN).Name & """"
                 tmp = tmp & IIf(prop(EC_KEY_DB_AUTOINCREMENT), ", auto_increment:=" & prop(EC_KEY_DB_AUTOINCREMENT), "")

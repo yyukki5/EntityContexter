@@ -864,66 +864,71 @@ End Function
 
 Private Function SetPropertyInfoOfRelatedTabel(props As Collection, base_table As ADOX.Table, base_column As ADOX.Column) As Collection
     Dim tbl As ADOX.Table, ky As ADOX.Key, col As ADOX.Column, prop As Collection
-    Dim rel
+    Dim rel, rels
     
     ' todo
-'    For Each tbl In catalog_.Tables
-'        For Each rel In GetRelations(base_table.Name, tbl.Name)
-'            If rel(KEY_DB_BASE_KEY_TABLE_NAME) = base_table.Name Then
-'                Set prop = GetPropertyInfoOfRelatedEntities((rel(KEY_DB_RELATED_TABLE_NAME)))
-'                Call props.Add(prop, Key:=prop(ENTIINFO_PROPERTY_NAME))
-'            End If
-'        Next
-'    Next
-    
-    ' todo modify to upper
-    If CanGetAdoxKey Then
-        For Each tbl In catalog_.Tables
-            If tbl.Name = base_table.Name Then
-                For Each ky In tbl.Keys
-                    If ky.Type = adKeyForeign Then
-                        For Each col In ky.Columns
-                            If col.Name = base_column.Name Then
-                                If IsPrimaryKeyBy(catalog_.Tables(ky.RelatedTable).Indexes, catalog_.Tables(ky.RelatedTable).Columns(col.RelatedColumn)) Then
-                                    Set prop = GetPropertyInfoOfRelatedEntity(ky.RelatedTable)
-                                    Call props.Add(prop, Key:=prop(ENTIINFO_PROPERTY_NAME))
-                                Else
-                                    Set prop = GetPropertyInfoOfRelatedEntities(ky.RelatedTable)
-                                    Call props.Add(prop, Key:=prop(ENTIINFO_PROPERTY_NAME))
-                                End If
-                            End If
-                        Next
-                    End If
-                Next
-            Else
-                For Each ky In tbl.Keys
-                    If ky.RelatedTable = base_table.Name And ky.Type = adKeyForeign Then
-                        For Each col In ky.Columns
-                            If col.RelatedColumn = base_column.Name Then
-                                If IsPrimaryKeyBy(base_table.Indexes, base_column) Then
-                                    Set prop = GetPropertyInfoOfRelatedEntities(tbl.Name)
-                                    Call props.Add(prop, Key:=prop(ENTIINFO_PROPERTY_NAME))
-                                Else
-                                    Set prop = GetPropertyInfoOfRelatedEntity(tbl.Name)
-                                    Call props.Add(prop, Key:=prop(ENTIINFO_PROPERTY_NAME))
-                                End If
-                            End If
-                        Next
-
-                    End If
-
-                Next
+    For Each tbl In catalog_.Tables
+        Set rels = GetRelations(base_table.Name, tbl.Name)
+        For Each rel In rels
+            If rel(KEY_DB_BASE_KEY_TABLE_NAME) = base_table.Name And rel(KEY_DB_BASE_KEY_FIELD_NAME) = base_column.Name Then
+                If rel("IsNto1") Then
+                    Set prop = GetPropertyInfoOfRelatedEntity((rel(KEY_DB_RELATED_TABLE_NAME)))
+                Else
+                    Set prop = GetPropertyInfoOfRelatedEntities((rel(KEY_DB_RELATED_TABLE_NAME)))
+                End If
+                Call props.Add(prop, Key:=prop(ENTIINFO_PROPERTY_NAME))
             End If
         Next
-
-    Else
-        ' todo case of T-SQL
-        Dim qry As String
-        qry = "SELECT fk.CONSTRAINT_NAME AS ForeignKey, fk.TABLE_NAME AS ChildTable, fk.COLUMN_NAME AS ChildColumn, pk.TABLE_NAME AS ParentTable, pk.COLUMN_NAME AS ParentColumn " & _
-            "FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS rc JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS fk " & _
-            "OifN rc.CONSTRAINT_NAME = fk.CONSTRAINT_NAME JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS pk ON rc.UNIQUE_CONSTRAINT_NAME = pk.CONSTRAINT_NAME Order BY ChildTable, ForeignKey;"
-
-    End If
+    Next
+'
+'    ' todo modify to upper
+'    If CanGetAdoxKey Then
+'        For Each tbl In catalog_.Tables
+'            If tbl.Name = base_table.Name Then
+'                For Each ky In tbl.Keys
+'                    If ky.Type = adKeyForeign Then
+'                        For Each col In ky.Columns
+'                            If col.Name = base_column.Name Then
+'                                If IsPrimaryKeyBy(catalog_.Tables(ky.RelatedTable).Indexes, catalog_.Tables(ky.RelatedTable).Columns(col.RelatedColumn)) Then
+'                                    Set prop = GetPropertyInfoOfRelatedEntity(ky.RelatedTable)
+'                                    Call props.Add(prop, Key:=prop(ENTIINFO_PROPERTY_NAME))
+'                                Else
+'                                    Set prop = GetPropertyInfoOfRelatedEntities(ky.RelatedTable)
+'                                    Call props.Add(prop, Key:=prop(ENTIINFO_PROPERTY_NAME))
+'                                End If
+'                            End If
+'                        Next
+'                    End If
+'                Next
+'            Else
+'                For Each ky In tbl.Keys
+'                    If ky.RelatedTable = base_table.Name And ky.Type = adKeyForeign Then
+'                        For Each col In ky.Columns
+'                            If col.RelatedColumn = base_column.Name Then
+'                                If IsPrimaryKeyBy(base_table.Indexes, base_column) Then
+'                                    Set prop = GetPropertyInfoOfRelatedEntities(tbl.Name)
+'                                    Call props.Add(prop, Key:=prop(ENTIINFO_PROPERTY_NAME))
+'                                Else
+'                                    Set prop = GetPropertyInfoOfRelatedEntity(tbl.Name)
+'                                    Call props.Add(prop, Key:=prop(ENTIINFO_PROPERTY_NAME))
+'                                End If
+'                            End If
+'                        Next
+'
+'                    End If
+'
+'                Next
+'            End If
+'        Next
+'
+'    Else
+'        ' todo case of T-SQL
+'        Dim qry As String
+'        qry = "SELECT fk.CONSTRAINT_NAME AS ForeignKey, fk.TABLE_NAME AS ChildTable, fk.COLUMN_NAME AS ChildColumn, pk.TABLE_NAME AS ParentTable, pk.COLUMN_NAME AS ParentColumn " & _
+'            "FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS rc JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS fk " & _
+'            "OifN rc.CONSTRAINT_NAME = fk.CONSTRAINT_NAME JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS pk ON rc.UNIQUE_CONSTRAINT_NAME = pk.CONSTRAINT_NAME Order BY ChildTable, ForeignKey;"
+'
+'    End If
 End Function
 
 
@@ -939,6 +944,7 @@ Private Function GetRelations(base_table_name As String, related_table_name As S
                     Call key_info.Add(related_table_name, KEY_DB_RELATED_TABLE_NAME)
                     Call key_info.Add(col.Name, KEY_DB_BASE_KEY_FIELD_NAME)
                     Call key_info.Add(col.RelatedColumn, KEY_DB_RELATED_FIELD_NAME)
+                    Call key_info.Add(True, "IsNto1")
                     Call key_infos.Add(key_info, ky.Name)
                 Next
             End If
@@ -948,10 +954,11 @@ Private Function GetRelations(base_table_name As String, related_table_name As S
                 For Each ky In tbl.Keys
                     If ky.RelatedTable = base_table_name And ky.Type = adKeyForeign Then
                         For Each col In ky.Columns
-                            Call key_info.Add(base_table_name, KEY_DB_RELATED_TABLE_NAME)
-                            Call key_info.Add(related_table_name, KEY_DB_BASE_KEY_TABLE_NAME)
+                            Call key_info.Add(base_table_name, KEY_DB_BASE_KEY_TABLE_NAME)
+                            Call key_info.Add(related_table_name, KEY_DB_RELATED_TABLE_NAME)
                             Call key_info.Add(col.RelatedColumn, KEY_DB_BASE_KEY_FIELD_NAME)
                             Call key_info.Add(col.Name, KEY_DB_RELATED_FIELD_NAME)
+                            Call key_info.Add(False, "IsNto1")
                             Call key_infos.Add(key_info, ky.Name)
                         Next
                      End If
@@ -962,23 +969,25 @@ Private Function GetRelations(base_table_name As String, related_table_name As S
         Dim qry As String
         qry = "SELECT fk.CONSTRAINT_NAME AS ForeignKey, fk.TABLE_NAME AS ChildTable, fk.COLUMN_NAME AS ChildColumn, pk.TABLE_NAME AS ParentTable, pk.COLUMN_NAME AS ParentColumn " & _
             "FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS rc JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS fk " & _
-            "OifN rc.CONSTRAINT_NAME = fk.CONSTRAINT_NAME JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS pk ON rc.UNIQUE_CONSTRAINT_NAME = pk.CONSTRAINT_NAME Order BY ChildTable, ForeignKey;"
+            "ON rc.CONSTRAINT_NAME = fk.CONSTRAINT_NAME JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS pk ON rc.UNIQUE_CONSTRAINT_NAME = pk.CONSTRAINT_NAME Order BY ChildTable, ForeignKey;"
         
         Dim rs, i As Long
         rs = cn_.Execute(qry).GetRows
-        For i = LBound(rs) To UBound(rs)
-            If rs(i, 1) = base_table_name And rs(i, 3) = related_table_name Then
-                Call key_info.Add(rs(i, 1), KEY_DB_BASE_KEY_TABLE_NAME)
-                Call key_info.Add(rs(i, 3), KEY_DB_RELATED_TABLE_NAME)
-                Call key_info.Add(rs(i, 2), KEY_DB_BASE_KEY_FIELD_NAME)
-                Call key_info.Add(rs(i, 4), KEY_DB_RELATED_FIELD_NAME)
-                Call key_infos.Add(key_info, ky.Name)
-            ElseIf rs(i, 1) = related_table_name And rs(i, 3) = base_table_name Then
-                Call key_info.Add(rs(i, 3), KEY_DB_BASE_KEY_TABLE_NAME)
-                Call key_info.Add(rs(i, 1), KEY_DB_RELATED_TABLE_NAME)
-                Call key_info.Add(rs(i, 4), KEY_DB_BASE_KEY_FIELD_NAME)
-                Call key_info.Add(rs(i, 2), KEY_DB_RELATED_FIELD_NAME)
-                Call key_infos.Add(key_info, ky.Name)
+        For i = LBound(rs, 2) To UBound(rs, 2)
+            If rs(1, i) = base_table_name And rs(3, i) = related_table_name Then
+                Call key_info.Add(rs(1, i), KEY_DB_BASE_KEY_TABLE_NAME)
+                Call key_info.Add(rs(3, i), KEY_DB_RELATED_TABLE_NAME)
+                Call key_info.Add(rs(2, i), KEY_DB_BASE_KEY_FIELD_NAME)
+                Call key_info.Add(rs(4, i), KEY_DB_RELATED_FIELD_NAME)
+                Call key_info.Add(True, "IsNto1")
+                Call key_infos.Add(key_info, rs(0, i))
+            ElseIf rs(1, i) = related_table_name And rs(3, i) = base_table_name Then
+                Call key_info.Add(rs(3, i), KEY_DB_BASE_KEY_TABLE_NAME)
+                Call key_info.Add(rs(1, i), KEY_DB_RELATED_TABLE_NAME)
+                Call key_info.Add(rs(4, i), KEY_DB_BASE_KEY_FIELD_NAME)
+                Call key_info.Add(rs(2, i), KEY_DB_RELATED_FIELD_NAME)
+                Call key_info.Add(False, "IsNto1")
+                Call key_infos.Add(key_info, rs(0, i))
             End If
         Next
         

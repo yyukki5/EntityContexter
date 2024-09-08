@@ -20,28 +20,69 @@ Option Explicit
 Private Const VBA_CLASS_MODULE_ID As Long = 2
 Private Const LOOP_MAX As Long = 2
 
-Private Const EC_KEY_ENTITY_NAME As String = "EntityName"
-Private Const EC_KEY_ENTITIES_NAME As String = "EntitiesName"
-Private Const EC_KEY_ENTITY_ADOX_TABLE As String = "ADOX.Table"
-Private Const EC_KEY_DB_TABLE_NAME As String = "DBTableName"
-Private Const EC_KEY_SQL_TABLE_NAME As String = "SqlTableName"
-Private Const EC_KEY_TABLE_PRIMARY_KEY As String = "PrimaryKey"
 
-Private Const EC_KEY_ENTITY_PROPERTIES As String = "Properties"
-Private Const EC_KEY_ENTITY_PROPERTY_NAME As String = "PropertyName"
-Private Const EC_KEY_ENTITY_FIELD_NAME As String = "EntityFieldName"
-Private Const EC_KEY_ENTITY_PROPERTY_TYPE As String = "EntityPropertyType"
-Private Const EC_KEY_ENTITY_IS_PROPERTY_RELATED As String = "RelatedProperty"
-Private Const EC_KEY_ENTITY_ADOX_COLUMN As String = "ADOX.Column"
-Private Const EC_KEY_ENTITY_EXIST_FOREIGNKEY As String = "ExistForeignKey"
-Private Const EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY As String = "ExistInverseForeignKey"
-Private Const EC_KEY_ENTITY_FOREIGNKEY As String = "ForeignKey"
-Private Const EC_KEY_ENTITY_FOREIGN_TABLE As String = "ForeignTable"
-Private Const EC_KEY_ENTITY_INVERSE_FOREIGNKEY As String = "InverseForeignKey"
-Private Const EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE As String = "InverseForeignTable"
-Private Const EC_KEY_DB_FIELD_NAME As String = "DbFieldName"
-Private Const EC_KEY_DB_FIELD_TYPE As String = "DbFieldType"
-Private Const EC_KEY_DB_AUTOINCREMENT As String = "Autoincrement"
+'Private Const ENTIINFO_ENTITY As String = "Entity"
+Private Const ENTIINFO_ENTITIES_NAME As String = "EntitiesName"
+Private Const ENTIINFO_ENTITY_NAME As String = "EntityName"
+Private Const ENTIINFO_PROPERTIES As String = "Properties"
+Private Const ENTIINFO_PROPERTY_NAME As String = "PropertyName"
+Private Const ENTIINFO_PROPERTY_TYPE As String = "PropertyType"
+Private Const ENTIINFO_PROPERTY_FIELD_NAME As String = "PropertyFieldName"
+Private Const ENTIINFO_DB_TABLE_NAME As String = "DbTableName"
+Private Const ENTIINFO_DB_SQL_TABLE_NAME As String = "SQLTableName"
+Private Const ENTIINFO_DB_FIELD_NAME As String = "DbFieldName"
+Private Const ENTIINFO_DB_FIELD_TYPE As String = "DbFieldType"
+Private Const ENTIINFO_DB_IS_AUTOINCREMENT As String = "DbIsAutoNumber"
+Private Const ENTIINFO_DB_IS_PRIMARY_KEY As String = "DbIsPrimaryKey"
+Private Const ENTIINFO_DB_IS_UNIQUE_KEY As String = "DbIsUniqueKey"
+Private Const ENTIINFO_DB_IS_INDEX As String = "DbIsIndex"
+
+Private Const DBINFO_ENTITY_NAME As String = "EcEntityName"
+Private Const DBINFO_TABLE_NAME As String = "DbTableName"
+Private Const DBINFO_SQL_TABLE_NAME As String = "SQLTableName"
+Private Const DBINFO_PROPERTIES As String = "Properties"
+Private Const DBINFO_PROPERTY_NAME As String = "PropertyName"
+Private Const DBINFO_FIELD_NAME As String = "DbFieldName"
+Private Const DBINFO_FIELD_TYPE As String = "DbFieldType"
+Private Const DBINFO_IS_AUTONUMBER As String = "DbIsAutoNumber"
+Private Const DBINFO_IS_PRIMARY_KEY As String = "DbIsPrimaryKey"
+Private Const DBINFO_IS_UNIQUE_KEY As String = "DbIsUniqueKey"
+Private Const DBINFO_INDEX As String = "DbIsPrimaryKey"
+
+
+
+Private Const KEY_ENTITY_NAME As String = "EntityName"
+Private Const KEY_ENTITIES_NAME As String = "EntitiesName"
+Private Const KEY_ENTITY_ADOX_TABLE As String = "ADOX.Table"
+Private Const KEY_DB_TABLE_NAME As String = "DBTableName"
+Private Const KEY_SQL_TABLE_NAME As String = "SqlTableName"
+Private Const KEY_TABLE_PRIMARY_KEY As String = "PrimaryKey"
+
+Private Const KEY_ENTITY_PROPERTIES As String = "Properties"
+Private Const KEY_ENTITY_PROPERTY_NAME As String = "PropertyName"
+Private Const KEY_ENTITY_FIELD_NAME As String = "EntityFieldName"
+Private Const KEY_ENTITY_PROPERTY_TYPE As String = "EntityPropertyType"
+Private Const KEY_ENTITY_IS_PROPERTY_RELATED As String = "RelatedProperty"
+Private Const KEY_DB_ADOX_COLUMN As String = "ADOX.Column"
+Private Const KEY_ENTITY_EXIST_FOREIGNKEY As String = "ExistForeignKey"
+Private Const KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY As String = "ExistInverseForeignKey"
+Private Const KEY_ENTITY_FOREIGNKEY As String = "ForeignKey"
+Private Const KEY_ENTITY_FOREIGN_TABLE As String = "ForeignTable"
+Private Const KEY_ENTITY_INVERSE_FOREIGNKEY As String = "InverseForeignKey"
+Private Const KEY_ENTITY_INVERSE_FOREIGN_TABLE As String = "InverseForeignTable"
+Private Const KEY_DB_FIELD_NAME As String = "DbFieldName"
+Private Const KEY_DB_FIELD_TYPE As String = "DbFieldType"
+
+
+
+Private Const KEY_DB_RELATED_TABLE_NAME As String = "RelationBaseTableName"
+Private Const KEY_DB_RELATED_FIELD_NAME As String = "RelationBaseFieldName"
+Private Const KEY_DB_BASE_KEY_TABLE_NAME As String = "RelationRelatedTableName"
+Private Const KEY_DB_BASE_KEY_FIELD_NAME As String = "RelationRelatedFieldName"
+
+
+Private Const KEY_DB_AUTOINCREMENT As String = "Autoincrement"
+
 
 Private cn_ As ADODB.Connection
 Private catalog_ As ADOX.Catalog
@@ -82,8 +123,7 @@ Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, _
     Dim table_name As Collection, tableNames As New Collection, entityInfos As New Collection
     
     ' setting
-    If cn_.State <> adStateOpen Then cn_.Open
-    Set catalog_.ActiveConnection = cn_
+    OpenDb
     isExportFiles_ = usingAttribute
     schemaName_ = schema_name
     
@@ -92,16 +132,16 @@ Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, _
     
     ' create class module code from ADOX.catalog by table name
     For Each table_name In tableNames
-        Call entityInfos.Add(GetEntityInfoByTableName(table_name), table_name(EC_KEY_DB_TABLE_NAME))
+        Call entityInfos.Add(GetEntityInfoByTableName(table_name), table_name(ENTIINFO_DB_TABLE_NAME))
     Next
     
     ' Add relationship to class module code
-    Call SetEntityInfoRelatedColumns(entityInfos)
+'    Call SetEntityInfoRelatedColumns(entityInfos)
                 
     ' create class module from table names
     For Each table_name In tableNames
-        Call CreateEntityClassFromTableName(entityInfos(table_name(EC_KEY_DB_TABLE_NAME)))
-'        Debug.Print table_name(EC_KEY_DB_TABLE_NAME) & ": done"
+        Call CreateEntityClassFromTableName(entityInfos(table_name(ENTIINFO_DB_TABLE_NAME)))
+'        Debug.Print table_name(KEY_DB_TABLE_NAME) & ": done"
     Next
     ' to be implement:  create DbContext.cls
     Call CreateDbContext(entityInfos, dbcontext_name)
@@ -113,60 +153,34 @@ End Function
 
 Public Function CreateDbInfoBy( _
     Optional table_name As String, _
-    Optional sql_table_name As String, _
-    Optional entity_name As String, _
-    Optional entities_name As String, _
-    Optional primary_key As String)
+    Optional sql_table_name As String _
+    )
     Dim info As Collection
     
     Set info = New Collection
-    Call info.Add(table_name, EC_KEY_DB_TABLE_NAME)
-    Call info.Add(sql_table_name, EC_KEY_SQL_TABLE_NAME)
-    Call info.Add(entity_name, EC_KEY_ENTITY_NAME)
-    Call info.Add(entities_name, EC_KEY_ENTITIES_NAME)
-    Call info.Add(primary_key, EC_KEY_TABLE_PRIMARY_KEY)
+    Call info.Add(table_name, DBINFO_TABLE_NAME)
+    Call info.Add(sql_table_name, DBINFO_SQL_TABLE_NAME)
     
     Set CreateDbInfoBy = info
 End Function
 
 Public Function CreateDbInfoPropertyBy( _
     Optional property_name As String, _
-    Optional entity_field_name As String, _
-    Optional entity_property_type As String, _
-    Optional db_table_name As String, _
     Optional db_field_name As String, _
     Optional db_field_type As ADOX.DataTypeEnum = 0, _
     Optional auto_increment As Boolean = False, _
-    Optional foreign_key As String, _
-    Optional foreign_table As String, _
-    Optional inverse_foreign_key As String, _
-    Optional inverse_foreign_table As String _
+    Optional primary_key As Boolean = False, _
+    Optional unique_key As Boolean = False _
     )
     Dim prop As Collection
     
     Set prop = New Collection
-    Call prop.Add(property_name, EC_KEY_ENTITY_PROPERTY_NAME)
-    Call prop.Add(entity_field_name, EC_KEY_ENTITY_FIELD_NAME)
-    Call prop.Add(entity_property_type, EC_KEY_ENTITY_PROPERTY_TYPE)
-    Call prop.Add(db_table_name, EC_KEY_DB_TABLE_NAME)
-    Call prop.Add(db_field_name, EC_KEY_DB_FIELD_NAME)
-    Call prop.Add(db_field_type, EC_KEY_DB_FIELD_TYPE)
-    Call prop.Add(auto_increment, EC_KEY_DB_AUTOINCREMENT)
-    
-    If foreign_key <> "" Then
-        Call prop.Add(True, EC_KEY_ENTITY_EXIST_FOREIGNKEY)
-        Call prop.Add(foreign_key, EC_KEY_ENTITY_FOREIGNKEY)
-        Call prop.Add(foreign_table, EC_KEY_ENTITY_FOREIGN_TABLE)
-    Else
-        Call prop.Add(False, EC_KEY_ENTITY_EXIST_FOREIGNKEY)
-    End If
-    If inverse_foreign_key <> "" Then
-        Call prop.Add(True, EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY)
-        Call prop.Add(inverse_foreign_key, EC_KEY_ENTITY_INVERSE_FOREIGNKEY)
-        Call prop.Add(inverse_foreign_table, EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE)
-    Else
-        Call prop.Add(False, EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY)
-    End If
+    Call prop.Add(property_name, DBINFO_PROPERTY_NAME)
+    Call prop.Add(db_field_name, DBINFO_FIELD_NAME)
+    Call prop.Add(db_field_type, DBINFO_FIELD_TYPE)
+    Call prop.Add(auto_increment, DBINFO_IS_AUTONUMBER)
+    Call prop.Add(primary_key, DBINFO_IS_PRIMARY_KEY)
+    Call prop.Add(unique_key, DBINFO_IS_UNIQUE_KEY)
     
     Set CreateDbInfoPropertyBy = prop
 End Function
@@ -174,51 +188,51 @@ End Function
 
 Public Function SetQueryDbSet(db_info, entity_name) As String
     fetchEntityName_ = entity_name
-    fetchQuery_ = "select * from " & db_info(entity_name)(EC_KEY_SQL_TABLE_NAME)
+    fetchQuery_ = "select * from " & db_info(entity_name)(DBINFO_SQL_TABLE_NAME)
 End Function
 
 Public Function SetQueryWhere(db_info, property_name As String, sql_operator As String, compare_value As String, Optional entity_name As String)
     entity_name = IIf(entity_name = "", fetchEntityName_, entity_name)
     lastSubQueryName_ = lastSubQueryName_ & "T"
-    fetchQuery_ = "select * from (" & fetchQuery_ & ") " & lastSubQueryName_ & " Where " & lastSubQueryName_ & "." & db_info(entity_name)(EC_KEY_ENTITY_PROPERTIES)(property_name)(EC_KEY_DB_FIELD_NAME) & " " & sql_operator & " " & compare_value
+    fetchQuery_ = "select * from (" & fetchQuery_ & ") " & lastSubQueryName_ & " Where " & lastSubQueryName_ & "." & db_info(entity_name)(KEY_ENTITY_PROPERTIES)(property_name)(KEY_DB_FIELD_NAME) & " " & sql_operator & " " & compare_value
 End Function
 
 Public Function SetQueryOrderBy(db_info, property_name As String, Optional entity_name As String, Optional is_asc As Boolean) As String
     entity_name = IIf(entity_name = "", fetchEntityName_, entity_name)
     lastSubQueryName_ = lastSubQueryName_ & "T"
-    fetchQuery_ = "select * from (" & fetchQuery_ & ") " & lastSubQueryName_ & " order by " & lastSubQueryName_ & "." & db_info(entity_name)(EC_KEY_ENTITY_PROPERTIES)(property_name)(EC_KEY_DB_FIELD_NAME) & IIf(is_asc, " asc", " desc")
+    fetchQuery_ = "select * from (" & fetchQuery_ & ") " & lastSubQueryName_ & " order by " & lastSubQueryName_ & "." & db_info(entity_name)(KEY_ENTITY_PROPERTIES)(property_name)(KEY_DB_FIELD_NAME) & IIf(is_asc, " asc", " desc")
 End Function
 Public Function SetQueryThenBy(db_info, property_name As String, Optional entity_name As String, Optional is_asc As Boolean) As String
     entity_name = IIf(entity_name = "", fetchEntityName_, entity_name)
-    fetchQuery_ = fetchQuery_ & "," & lastSubQueryName_ & "." & db_info(entity_name)(EC_KEY_ENTITY_PROPERTIES)(property_name)(EC_KEY_DB_FIELD_NAME) & IIf(is_asc, " asc", " desc")
+    fetchQuery_ = fetchQuery_ & "," & lastSubQueryName_ & "." & db_info(entity_name)(KEY_ENTITY_PROPERTIES)(property_name)(KEY_DB_FIELD_NAME) & IIf(is_asc, " asc", " desc")
 End Function
 
 Public Function SetQueryInclude(db_info As Variant, entity_name, entity_property_name) As String
     Dim table_name As String, related_entity_name As String, foregin_table_name As String, key_name As String, foregin_key_name As String
     
-    table_name = db_info(entity_name)(EC_KEY_DB_TABLE_NAME)
-    If db_info(entity_name)("Properties")(entity_property_name)(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Then
-        related_entity_name = db_info(entity_name)("Properties")(entity_property_name)(EC_KEY_ENTITY_FOREIGN_TABLE)
-        foregin_table_name = db_info(related_entity_name)(EC_KEY_DB_TABLE_NAME)
-        key_name = db_info(entity_name)("Properties")(related_entity_name)(EC_KEY_DB_FIELD_NAME)
-        foregin_key_name = db_info(entity_name)("Properties")(related_entity_name)(EC_KEY_ENTITY_FOREIGNKEY)
+    table_name = db_info(entity_name)(KEY_DB_TABLE_NAME)
+    If db_info(entity_name)("Properties")(entity_property_name)(KEY_ENTITY_EXIST_FOREIGNKEY) Then
+        related_entity_name = db_info(entity_name)("Properties")(entity_property_name)(KEY_ENTITY_FOREIGN_TABLE)
+        foregin_table_name = db_info(related_entity_name)(KEY_DB_TABLE_NAME)
+        key_name = db_info(entity_name)("Properties")(related_entity_name)(KEY_DB_FIELD_NAME)
+        foregin_key_name = db_info(entity_name)("Properties")(related_entity_name)(KEY_ENTITY_FOREIGNKEY)
     End If
-    If db_info(entity_name)("Properties")(entity_property_name)(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
-        foregin_table_name = db_info(entity_name)("Properties")(entity_property_name)(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE)
-        key_name = db_info(entity_name)("Properties")(entity_property_name)(EC_KEY_DB_FIELD_NAME)
-        foregin_key_name = db_info(entity_name)("Properties")(entity_property_name)(EC_KEY_ENTITY_INVERSE_FOREIGNKEY)
+    If db_info(entity_name)("Properties")(entity_property_name)(KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
+        foregin_table_name = db_info(entity_name)("Properties")(entity_property_name)(KEY_ENTITY_INVERSE_FOREIGN_TABLE)
+        key_name = db_info(entity_name)("Properties")(entity_property_name)(KEY_DB_FIELD_NAME)
+        foregin_key_name = db_info(entity_name)("Properties")(entity_property_name)(KEY_ENTITY_INVERSE_FOREIGNKEY)
     End If
     
     fetchQuery_ = "(" & fetchQuery_ & ") left outer join " & foregin_table_name & " on " & table_name & "." & key_name & " = " & foregin_table_name & "." & foregin_key_name
 End Function
 
 Public Function FetchRecords(entity_name As String, DbInfo As Object, dbc As Object, cnt As Long, Optional qry As String)
-    Dim rs As Recordset, Items As New Collection, T As Object, props As Collection, prop As Collection
+    Dim rs As Recordset, Items As New Collection, T As Object, props As Collection, prop As Collection, p As Variant
     Dim fkey, kyfld, foreign_table_name As String, ent_name, property_name As String, qry1, tbls As Collection
         
     If cnt > LOOP_MAX Then Set FetchRecords = Nothing:     Exit Function
         
-    Set props = DbInfo(entity_name)(EC_KEY_ENTITY_PROPERTIES)
+    Set props = DbInfo(entity_name)(DBINFO_PROPERTIES)
     If qry = "" Then qry = fetchQuery_ ' todo
     Set rs = FetchRecordSetByQuery(qry)
         
@@ -228,35 +242,37 @@ Public Function FetchRecords(entity_name As String, DbInfo As Object, dbc As Obj
     
         Set T = dbc.CreateObjectBy(entity_name)
         For Each prop In props
-            If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Then
+            If prop(DBINFO_FIELD_NAME) = "" Then
+                Set p = CallByName(T, prop(DBINFO_PROPERTY_NAME), VbGet)
+                If IsCollection(p) Then
+                    
+                    ' todo 0906: search ADOX and get relation data.
+                    fkey = prop(DBINFO_FIELD_NAME)
+                    kyfld = rs.Fields(fkey).Value
+                    ent_name = ConvertDbTableNameToEntityClassName(TypeName(p))(DBINFO_SQL_TABLE_NAME)             ' todo
+                    
+                    qry1 = "SELECT * FROM " & ent_name & " WHERE " & fkey & " = " & kyfld
+                    Set tbls = FetchRecords((ent_name), DbInfo, dbc, cnt + 1, (qry1))
+                    
+                    property_name = prop(KEY_ENTITY_PROPERTY_NAME)
+                    If (tbls Is Nothing) = False Then Call CallByName(CallByName(T, property_name, VbGet), "Items", VbSet, tbls)
                 
-                fkey = prop(EC_KEY_DB_FIELD_NAME)
-                kyfld = rs.Fields(prop(EC_KEY_ENTITY_FOREIGNKEY)).Value
-                foreign_table_name = prop(EC_KEY_ENTITY_FOREIGN_TABLE)
-                ent_name = prop(EC_KEY_ENTITY_FOREIGN_TABLE)           ' todo
-                
-                qry1 = "SELECT * FROM " & ent_name & " WHERE " & fkey & " = " & kyfld
-                Set tbls = FetchRecords((ent_name), DbInfo, dbc, cnt + 1, (qry1))
-                
-                property_name = prop(EC_KEY_ENTITY_PROPERTY_NAME)
-                If (tbls Is Nothing) = False Then Call CallByName(CallByName(T, property_name, VbGet), "Items", VbSet, tbls)
-            
-            ElseIf prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
-                
-                fkey = prop(EC_KEY_DB_FIELD_NAME)
-                kyfld = rs.Fields(prop(EC_KEY_DB_FIELD_NAME)).Value
-                foreign_table_name = prop(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE)
-                ent_name = prop(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE)           ' todo
-                
-                qry1 = "SELECT * FROM " & foreign_table_name & " WHERE " & fkey & " = " & kyfld
-                Set tbls = FetchRecords((ent_name), DbInfo, dbc, cnt + 1, (qry1))
-                
-                property_name = prop(EC_KEY_ENTITY_PROPERTY_NAME)
-                If (tbls Is Nothing) = False Then Call CallByName(T, property_name, VbSet, tbls.Item(1))
-            
+                Else
+                    
+                    fkey = prop(KEY_DB_FIELD_NAME)
+                    kyfld = rs.Fields(prop(KEY_DB_FIELD_NAME)).Value
+                    foreign_table_name = prop(KEY_ENTITY_INVERSE_FOREIGN_TABLE)
+                    ent_name = prop(KEY_ENTITY_INVERSE_FOREIGN_TABLE)           ' todo
+                    
+                    qry1 = "SELECT * FROM " & foreign_table_name & " WHERE " & fkey & " = " & kyfld
+                    Set tbls = FetchRecords((ent_name), DbInfo, dbc, cnt + 1, (qry1))
+                    
+                    property_name = prop(KEY_ENTITY_PROPERTY_NAME)
+                    If (tbls Is Nothing) = False Then Call CallByName(T, property_name, VbSet, tbls.Item(1))
+                End If
             Else
-                property_name = prop(EC_KEY_ENTITY_PROPERTY_NAME)
-                Call CallByName(T, property_name, VbLet, rs.Fields(prop(EC_KEY_DB_FIELD_NAME)).Value)
+                property_name = prop(DBINFO_PROPERTY_NAME)
+                Call CallByName(T, property_name, VbLet, rs.Fields(prop(DBINFO_FIELD_NAME)).Value)
             End If
         Next
         Items.Add T
@@ -267,17 +283,72 @@ Public Function FetchRecords(entity_name As String, DbInfo As Object, dbc As Obj
     Set FetchRecords = Items
 End Function
 
+
+Private Function DoesPrimaryKeyHaveValue(rec As Object, dbInfos As Object) As Boolean
+    Dim tbl As ADOX.Table, ky As ADOX.Key, col As ADOX.Column, DbInfo As Collection
+    DoesPrimaryKeyHaveValue = True
+    Set DbInfo = dbInfos(TypeName(rec))
+    Set tbl = catalog_.Tables(DbInfo(KEY_DB_TABLE_NAME))
+    For Each ky In tbl.Keys
+        If ky.Type = adKeyPrimary Then
+            For Each col In ky.Columns
+                If IsNullOrEmptyOrZeroOrWhiteSpace(CallByName(rec, GetPropertyNameByDbTableFieldName(dbInfos, tbl.Name, col.Name), VbGet)) Then
+                    DoesPrimaryKeyHaveValue = False
+                End If
+            Next
+        End If
+    Next
+End Function
+
+Private Function IsNullOrEmptyOrZeroOrWhiteSpace(v As Variant) As Boolean
+    IsNullOrEmptyOrZeroOrWhiteSpace = True
+    If IsNull(v) Then Exit Function
+    If IsEmpty(v) Then Exit Function
+    If vbInteger <= VarType(v) And VarType(v) <= vbCurrency Then If (v) = 0 Then Exit Function
+    If VarType(v) = vbString Then If (v) = "" Then Exit Function
+    IsNullOrEmptyOrZeroOrWhiteSpace = False
+End Function
+
+
+'todo change Add()
 Public Function Insert(rec As Object, DbInfo As Object)
     Dim rs As New ADODB.Recordset, prop As Collection
-                                    
+                                            
 On Error GoTo errOpen
-    If cn_.State <> adStateOpen Then cn_.Open
+    If cn_.State <> adStateOpen Then cn_.Open: Set catalog_.ActiveConnection = cn_
     cn_.CursorLocation = adUseClient
+    
+    '
+    For Each prop In DbInfo(TypeName(rec))(KEY_ENTITY_PROPERTIES)
+        If prop(KEY_ENTITY_EXIST_FOREIGNKEY) Then
+'            If DoesPrimaryKeyHaveValue(rec, DbInfo) Then If DoesUniqueKeyHaveValue(rec, DbInfo) Then Exit Function
+'            Call Insert(CallByName(rec, prop(KEY_ENTITY_PROPERTY_NAME), VbGet), DbInfo)
+            Dim r As Object
+            For Each r In CallByName(rec, prop(KEY_ENTITY_PROPERTY_NAME), VbGet)
+                
+                Call Insert(r, DbInfo)
+            Next
+
+
+        ElseIf prop(KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
+'            If DoesPrimaryKeyHaveValue(rec, dbInfo) Then If DoesUniqueKeyHaveValue(rec, dbInfo) Then Exit Function
+            If DoesPrimaryKeyHaveValue(rec, DbInfo) Then Exit Function
+        
+            Call Insert(CallByName(rec, prop(KEY_ENTITY_PROPERTY_NAME), VbGet), DbInfo)
+            
+            Dim v
+            v = CallByName(CallByName(rec, prop(KEY_ENTITY_PROPERTY_NAME), VbGet), _
+                GetPropByTableFeildName(DbInfo, prop(KEY_ENTITY_INVERSE_FOREIGN_TABLE), prop(KEY_ENTITY_INVERSE_FOREIGNKEY))(KEY_ENTITY_PROPERTY_NAME), VbGet)
+            Call CallByName(rec, GetPropByTableFeildName(prop, prop(KEY_DB_BASE_KEY_TABLE_NAME), prop(KEY_DB_BASE_KEY_FIELD_NAME))(KEY_ENTITY_PROPERTY_NAME), VbLet, v)
+        Else
+        End If
+    Next
+                
     If HasPrimaryKey(rec, DbInfo) = False Then If ExistUniqueRecord(rec, DbInfo) Then Call Err.Raise(10003, "EntityContexter.Insert()", "Record is already exist")
     
     Call cn_.BeginTrans
 On Error GoTo errTrans
-    Call rs.Open(Source:=DbInfo(TypeName(rec))(EC_KEY_SQL_TABLE_NAME), ActiveConnection:=cn_, LockType:=adLockOptimistic)
+    Call rs.Open(Source:=DbInfo(TypeName(rec))(KEY_SQL_TABLE_NAME), ActiveConnection:=cn_, LockType:=adLockOptimistic)
     Call rs.AddNew(GetFieldsListByEntity(rec, DbInfo), GetValuesListByEntity(rec, DbInfo))
     Call SetAutoincrementFieldsValues(rs, rec, DbInfo)
     Call cn_.CommitTrans
@@ -293,10 +364,10 @@ End Function
 Private Function GetValuesListByEntity(rec As Object, DbInfo As Object)
     Dim prop As Collection, col As New Collection
     
-    For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
-        If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
+    For Each prop In DbInfo(TypeName(rec))(KEY_ENTITY_PROPERTIES)
+        If prop(KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
         Else
-            If prop(EC_KEY_DB_AUTOINCREMENT) = False Then col.Add CallByName(rec, prop(EC_KEY_ENTITY_PROPERTY_NAME), VbGet)
+            If prop(KEY_DB_AUTOINCREMENT) = False Then col.Add CallByName(rec, prop(KEY_ENTITY_PROPERTY_NAME), VbGet)
         End If
     Next
     GetValuesListByEntity = CollectionToArray(col)
@@ -307,17 +378,17 @@ Private Function GetFieldsListByEntity(rec As Object, DbInfo As Object)
     Dim prop As Collection, col As New Collection
 
 
-    For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
-        If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
+    For Each prop In DbInfo(TypeName(rec))(KEY_ENTITY_PROPERTIES)
+        If prop(KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
         Else
-            If prop(EC_KEY_DB_AUTOINCREMENT) = False Then col.Add prop(EC_KEY_DB_FIELD_NAME)
+            If prop(KEY_DB_AUTOINCREMENT) = False Then col.Add prop(KEY_DB_FIELD_NAME)
         End If
     Next
     GetFieldsListByEntity = CollectionToArray(col)
 
 End Function
 
-
+'todo change Update()
 Public Function Update(rec As Object, DbInfo As Object)
     
 On Error GoTo errOpen
@@ -338,6 +409,7 @@ errOpen:
     Err.Raise Err.Number, Err.Source & vbCrLf & "EntityContexter.Update()", Err.Description
 End Function
 
+'todo change Remove()
 Public Function Delete(rec As Object, DbInfo As Object)
     
 On Error GoTo errOpen
@@ -361,11 +433,11 @@ End Function
 Private Sub MoveToRecord(rs As ADODB.Recordset, rec As Object, DbInfo As Collection)
     Dim index_field As String, index_value, prop As Collection
 
-    index_field = DbInfo(TypeName(rec))(EC_KEY_TABLE_PRIMARY_KEY)
-    For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
-        If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
+    index_field = DbInfo(TypeName(rec))(KEY_TABLE_PRIMARY_KEY)
+    For Each prop In DbInfo(TypeName(rec))(KEY_ENTITY_PROPERTIES)
+        If prop(KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
         Else
-            If prop(EC_KEY_DB_FIELD_NAME) = index_field Then index_value = CallByName(rec, prop(EC_KEY_ENTITY_PROPERTY_NAME), VbGet)
+            If prop(KEY_DB_FIELD_NAME) = index_field Then index_value = CallByName(rec, prop(KEY_ENTITY_PROPERTY_NAME), VbGet)
         End If
     Next
     
@@ -379,9 +451,9 @@ End Sub
 Private Function SetAutoincrementFieldsValues(rs As ADODB.Recordset, rec As Object, DbInfo As Object)
     Dim prop As Collection
 
-    For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
-        If prop(EC_KEY_DB_AUTOINCREMENT) = True Then _
-            Call CallByName(rec, prop(EC_KEY_ENTITY_PROPERTY_NAME), VbLet, rs.Fields(prop(EC_KEY_DB_FIELD_NAME)).Value)
+    For Each prop In DbInfo(TypeName(rec))(KEY_ENTITY_PROPERTIES)
+        If prop(KEY_DB_AUTOINCREMENT) = True Then _
+            Call CallByName(rec, prop(KEY_ENTITY_PROPERTY_NAME), VbLet, rs.Fields(prop(KEY_DB_FIELD_NAME)).Value)
     Next
 End Function
 
@@ -389,27 +461,27 @@ Private Function HasPrimaryKey(rec As Object, DbInfo As Object) As Boolean
     Dim ind As ADOX.Index
     
     Set catalog_.ActiveConnection = cn_
-    For Each ind In catalog_.Tables(DbInfo(TypeName(rec))(EC_KEY_DB_TABLE_NAME)).Indexes
+    For Each ind In catalog_.Tables(DbInfo(TypeName(rec))(KEY_DB_TABLE_NAME)).Indexes
         If ind.PrimaryKey Then HasPrimaryKey = True: Exit Function
     Next
        
 End Function
 
-Private Function ExistUniqueRecord(rec As Object, DbInfos As Object) As Boolean
+Private Function ExistUniqueRecord(rec As Object, dbInfos As Object) As Boolean
     Dim qry As String
-    qry = "select * from " & DbInfos(TypeName(rec))(EC_KEY_SQL_TABLE_NAME) & GetQueryPrimaryWhere(rec, DbInfos)
+    qry = "select * from " & dbInfos(TypeName(rec))(KEY_SQL_TABLE_NAME) & GetQueryPrimaryWhere(rec, dbInfos)
     ExistUniqueRecord = cn_.Execute(CommandText:=qry).RecordCount = 1
 End Function
 
-Private Function GetQueryPrimaryWhere(rec As Object, DbInfos As Object) As String
+Private Function GetQueryPrimaryWhere(rec As Object, dbInfos As Object) As String
     Dim qry As String, ind As ADOX.Index, col As ADOX.Column
     
     Set catalog_.ActiveConnection = cn_
     qry = " Where "
-    For Each ind In catalog_.Tables(DbInfos(TypeName(rec))(EC_KEY_DB_TABLE_NAME)).Indexes
+    For Each ind In catalog_.Tables(dbInfos(TypeName(rec))(KEY_DB_TABLE_NAME)).Indexes
         If ind.PrimaryKey Then
             For Each col In ind.Columns
-                qry = qry & "[" & col.Name & "] = " & ConvertValueToSqlQuery(GetDbInfoPropertyByFieldName(col.Name, TypeName(rec), DbInfos)(EC_KEY_ENTITY_PROPERTY_NAME), rec, DbInfos) & ", "
+                qry = qry & "[" & col.Name & "] = " & ConvertValueToSqlQuery(GetDbInfoPropertyByFieldName(col.Name, TypeName(rec), dbInfos)(KEY_ENTITY_PROPERTY_NAME), rec, dbInfos) & ", "
             Next
         End If
     Next
@@ -418,8 +490,17 @@ Private Function GetQueryPrimaryWhere(rec As Object, DbInfos As Object) As Strin
     GetQueryPrimaryWhere = qry
 End Function
 
-Private Function GetPropByColumnName()
-
+Private Function GetPropByTableFeildName(db_infos As Collection, table_name As String, field_name As String) As Collection
+    Dim db_info, props, prop
+    For Each db_info In db_infos
+        If db_info(KEY_DB_TABLE_NAME) = table_name Then
+            For Each prop In db_info(KEY_ENTITY_PROPERTIES)
+                If prop(KEY_DB_FIELD_NAME) = field_name Then
+                    Set GetPropByTableFeildName = prop
+                End If
+            Next
+        End If
+    Next
 End Function
 
 
@@ -428,19 +509,19 @@ Private Function CreateDeleteQuery(rec As Object, DbInfo As Object) As String
     Dim table_name As String, key_prop_name As String, key_field_name As String, key_value As Variant
     
     ' todo update to delete related table's record by using inner join.
-    CreateDeleteQuery = "Delete From " & DbInfo(TypeName(rec))(EC_KEY_SQL_TABLE_NAME) & GetQueryPrimaryWhere(rec, DbInfo)
+    CreateDeleteQuery = "Delete From " & DbInfo(TypeName(rec))(KEY_SQL_TABLE_NAME) & GetQueryPrimaryWhere(rec, DbInfo)
     
 End Function
 
 Private Function CreateUpdateQuery(rec As Object, DbInfo As Object) As String
     Dim table_name As String, key_prop_name As String, key_field_name As String, key_value As Variant, qry As String, prop As Collection
     
-    qry = "Update " & DbInfo(TypeName(rec))(EC_KEY_SQL_TABLE_NAME) & " set "
-    For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
-        If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
+    qry = "Update " & DbInfo(TypeName(rec))(KEY_SQL_TABLE_NAME) & " set "
+    For Each prop In DbInfo(TypeName(rec))(KEY_ENTITY_PROPERTIES)
+        If prop(KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
         Else
-            If prop(EC_KEY_DB_AUTOINCREMENT) = False Then _
-                qry = qry & "[" & prop(EC_KEY_DB_FIELD_NAME) & "] = " & ConvertValueToSqlQuery((prop(EC_KEY_ENTITY_PROPERTY_NAME)), rec, DbInfo) & ", "
+            If prop(KEY_DB_AUTOINCREMENT) = False Then _
+                qry = qry & "[" & prop(KEY_DB_FIELD_NAME) & "] = " & ConvertValueToSqlQuery((prop(KEY_ENTITY_PROPERTY_NAME)), rec, DbInfo) & ", "
         End If
     Next
     qry = Left(qry, Len(qry) - 2) & GetQueryPrimaryWhere(rec, DbInfo)
@@ -451,13 +532,13 @@ End Function
 Private Function CreateInsertQuery(rec As Object, DbInfo As Object) As String
     Dim qry As String, field_names As String, field_values As String, prop As Collection
         
-    qry = "Insert into " & DbInfo(TypeName(rec))(EC_KEY_SQL_TABLE_NAME)
-    For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
-        If prop(EC_KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(EC_KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
+    qry = "Insert into " & DbInfo(TypeName(rec))(KEY_SQL_TABLE_NAME)
+    For Each prop In DbInfo(TypeName(rec))(KEY_ENTITY_PROPERTIES)
+        If prop(KEY_ENTITY_EXIST_FOREIGNKEY) Or prop(KEY_ENTITY_EXIST_INVERSE_FOREIGNKEY) Then
         Else
-            If prop(EC_KEY_DB_AUTOINCREMENT) = False Then
-                field_names = field_names & prop(EC_KEY_DB_FIELD_NAME) & ", "
-                field_values = field_values & ConvertValueToSqlQuery((prop(EC_KEY_ENTITY_PROPERTY_NAME)), rec, DbInfo) & ", "
+            If prop(KEY_DB_AUTOINCREMENT) = False Then
+                field_names = field_names & prop(KEY_DB_FIELD_NAME) & ", "
+                field_values = field_values & ConvertValueToSqlQuery((prop(KEY_ENTITY_PROPERTY_NAME)), rec, DbInfo) & ", "
             End If
         End If
     Next
@@ -471,7 +552,7 @@ End Function
 Private Function ConvertValueToSqlQuery(prop_name As String, rec As Object, DbInfo As Object) As String
     Dim v As Variant, field_type As ADOX.DataTypeEnum
     v = CallByName(rec, prop_name, VbGet)
-    field_type = DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)(prop_name)(EC_KEY_DB_FIELD_TYPE)
+    field_type = DbInfo(TypeName(rec))(KEY_ENTITY_PROPERTIES)(prop_name)(KEY_DB_FIELD_TYPE)
     Select Case VarType(v)
         Case vbEmpty:  v = "Null"
         Case vbNull:   v = "Null"
@@ -492,7 +573,7 @@ Private Function GetTableNameByEntity(rec As Object, DbInfo As Object) As String
     Dim table_name As String, info As Collection
     
     For Each info In DbInfo
-        If info(EC_KEY_ENTITY_NAME) = TypeName(rec) Then table_name = info(EC_KEY_SQL_TABLE_NAME)
+        If info(KEY_ENTITY_NAME) = TypeName(rec) Then table_name = info(KEY_SQL_TABLE_NAME)
     Next
     
     GetTableNameByEntity = table_name
@@ -501,17 +582,17 @@ End Function
 Private Function GetPrimaryKeyPropertyByEntity(rec As Object, DbInfo As Object) As String
     Dim prop As Collection
     
-    For Each prop In DbInfo(TypeName(rec))(EC_KEY_ENTITY_PROPERTIES)
-        If prop(EC_KEY_DB_FIELD_NAME) = DbInfo(TypeName(rec))(EC_KEY_TABLE_PRIMARY_KEY) Then GetPrimaryKeyPropertyByEntity = prop(EC_KEY_ENTITY_PROPERTY_NAME)
+    For Each prop In DbInfo(TypeName(rec))(KEY_ENTITY_PROPERTIES)
+        If prop(KEY_DB_FIELD_NAME) = DbInfo(TypeName(rec))(KEY_TABLE_PRIMARY_KEY) Then GetPrimaryKeyPropertyByEntity = prop(KEY_ENTITY_PROPERTY_NAME)
     Next
     
 End Function
 
-Private Function GetDbInfoPropertyByFieldName(field_name As String, entity_name As String, DbInfos As Object) As Collection
+Private Function GetDbInfoPropertyByFieldName(field_name As String, entity_name As String, dbInfos As Object) As Collection
     Dim prop As Collection
     
-    For Each prop In DbInfos(entity_name)(EC_KEY_ENTITY_PROPERTIES)
-        If prop(EC_KEY_DB_FIELD_NAME) = field_name Then Set GetDbInfoPropertyByFieldName = prop
+    For Each prop In dbInfos(entity_name)(KEY_ENTITY_PROPERTIES)
+        If prop(KEY_DB_FIELD_NAME) = field_name Then Set GetDbInfoPropertyByFieldName = prop
     Next
     
 End Function
@@ -523,18 +604,15 @@ End Property
 
 
 ' Private Methods ----------------------------------------------------------------
-Private Function FetchRecordSetByQuery(query_string As String) As ADODB.Recordset
-    If cn_.State <> adStateOpen Then cn_.Open
-    Set FetchRecordSetByQuery = New ADODB.Recordset
-    FetchRecordSetByQuery.CursorLocation = adUseClient
-    Call FetchRecordSetByQuery.Open(query_string, cn_, LockType:=adLockReadOnly, CursorType:=adOpenStatic)
+Private Function OpenDb()
+    If cn_.State <> adStateOpen Then cn_.Open: Set catalog_.ActiveConnection = cn_
 End Function
 
 Private Function GetTableNameFromDb(Optional find_word As String = "") As Collection
     Dim tableNames As New Collection, sch As ADODB.Recordset, table_names As Collection
     
 On Error GoTo errLabel
-    If cn_.State <> adStateOpen Then cn_.Open
+    Call OpenDb
     Set sch = cn_.OpenSchema(adSchemaTables)
     
     sch.MoveFirst
@@ -545,15 +623,15 @@ On Error GoTo errLabel
         
         If ProviderHasSchema Then
             If sch.Fields("TABLE_SCHEMA").Value = schemaName_ Then
-                Call table_names.Add(sch.Fields("TABLE_NAME").Value, EC_KEY_DB_TABLE_NAME)
-                Call table_names.Add(ConvertToSqlTableNameBy(sch.Fields("TABLE_NAME").Value, schemaName_), EC_KEY_SQL_TABLE_NAME)
+                Call table_names.Add(sch.Fields("TABLE_NAME").Value, ENTIINFO_DB_TABLE_NAME)
+                Call table_names.Add(ConvertToSqlTableNameBy(sch.Fields("TABLE_NAME").Value, schemaName_), ENTIINFO_DB_SQL_TABLE_NAME)
                             
                 Call tableNames.Add(table_names)
             End If
         Else
             If sch.Fields("TABLE_TYPE").Value = "TABLE" Or sch.Fields("TABLE_TYPE").Value = "VIEW" Then
-                Call table_names.Add(sch.Fields("TABLE_NAME").Value, EC_KEY_DB_TABLE_NAME)
-                Call table_names.Add(ConvertToSqlTableNameBy(sch.Fields("TABLE_NAME").Value), EC_KEY_SQL_TABLE_NAME)
+                Call table_names.Add(sch.Fields("TABLE_NAME").Value, ENTIINFO_DB_TABLE_NAME)
+                Call table_names.Add(ConvertToSqlTableNameBy(sch.Fields("TABLE_NAME").Value), ENTIINFO_DB_SQL_TABLE_NAME)
                 
                 Call tableNames.Add(table_names)
             End If
@@ -569,69 +647,44 @@ errLabel:
 End Function
 
 Private Function ConvertToSqlTableNameBy(table_name As String, Optional schema_name As String) As String
-    If schema_name = "" Then
-        ConvertToSqlTableNameBy = "[" & table_name & "]"
-    Else
-        ConvertToSqlTableNameBy = "[" & schema_name & "]." & "[" & table_name & "]"
-    End If
+    ConvertToSqlTableNameBy = IIf(schema_name = "", "[" & table_name & "]", "[" & schema_name & "]." & "[" & table_name & "]")
 End Function
-Private Function ConvertToTableNameBy(sql_table_name As String) As String
-    If InStr(sql_table_name, "].[") > 0 Then
-        ConvertToTableNameBy = Mid(sql_table_name, InStr(sql_table_name, "].[") + 2, Len(sql_table_name) - 1)
-    Else
-        ConvertToTableNameBy = Mid(sql_table_name, 2, Len(sql_table_name) - 2)
-    End If
-End Function
-
-
-
+'Private Function ConvertToTableNameBy(sql_table_name As String) As String
+'    If InStr(sql_table_name, "].[") > 0 Then
+'        ConvertToTableNameBy = Mid(sql_table_name, InStr(sql_table_name, "].[") + 2, Len(sql_table_name) - 1)
+'    Else
+'        ConvertToTableNameBy = Mid(sql_table_name, 2, Len(sql_table_name) - 2)
+'    End If
+'End Function
 
 Private Function GetEntityInfoByTableName(table_name_info As Collection) As Collection
     Dim props As New Collection, prop As Collection, tbl As ADOX.Table, col As ADOX.Column, entity_info As New Collection
     Dim ky As ADOX.Key, table_name As String
     
-    table_name = table_name_info(EC_KEY_DB_TABLE_NAME)
+    table_name = table_name_info(ENTIINFO_DB_TABLE_NAME)
     Set tbl = catalog_.Tables(table_name)
     For Each col In tbl.Columns
         Set prop = GetPropertyInfoByColumn(col)
-        Call prop.Add(GetIsAutoNumberField(col, tbl.Name), EC_KEY_DB_AUTOINCREMENT)
-        Call props.Add(prop, prop(EC_KEY_ENTITY_PROPERTY_NAME))
+        Call prop.Add(IsIndexKeyBy(tbl.Indexes, col), ENTIINFO_DB_IS_INDEX)
+        Call prop.Add(IsPrimaryKeyBy(tbl.Indexes, col), ENTIINFO_DB_IS_PRIMARY_KEY)
+        Call prop.Add(IsUniqueKeyBy(tbl.Indexes, col), ENTIINFO_DB_IS_UNIQUE_KEY)
+        Call prop.Add(GetIsAutoNumberField(col, tbl.Name), ENTIINFO_DB_IS_AUTOINCREMENT)
+        
+        Call props.Add(prop, prop(ENTIINFO_PROPERTY_NAME))
     Next
     
-    Call entity_info.Add(table_name_info(EC_KEY_DB_TABLE_NAME), EC_KEY_DB_TABLE_NAME)
-    Call entity_info.Add(table_name_info(EC_KEY_SQL_TABLE_NAME), EC_KEY_SQL_TABLE_NAME)
-    Call entity_info.Add(ConvertDbTableNameToEntityClassName(table_name), EC_KEY_ENTITY_NAME)
-    Call entity_info.Add(ConvertDbTableNameToEntitesClassName(table_name), EC_KEY_ENTITIES_NAME)
-    Call entity_info.Add(tbl, EC_KEY_ENTITY_ADOX_TABLE)
-    Call entity_info.Add(props, EC_KEY_ENTITY_PROPERTIES)
+    For Each col In tbl.Columns
+        Call SetPropertyInfoOfRelatedTabel(props, tbl, col)
+    Next
+
+    Call entity_info.Add(table_name_info(ENTIINFO_DB_TABLE_NAME), ENTIINFO_DB_TABLE_NAME)
+    Call entity_info.Add(table_name_info(ENTIINFO_DB_SQL_TABLE_NAME), ENTIINFO_DB_SQL_TABLE_NAME)
+    Call entity_info.Add(ConvertDbTableNameToEntityClassName(table_name), ENTIINFO_ENTITY_NAME)
+    Call entity_info.Add(ConvertDbTableNameToEntitesClassName(table_name), ENTIINFO_ENTITIES_NAME)
+'    Call entity_info.Add(tbl, KEY_ENTITY_ADOX_TABLE)
+    Call entity_info.Add(props, ENTIINFO_PROPERTIES)
         
     Set GetEntityInfoByTableName = entity_info
-End Function
-
-
-Private Function GetIsPrimaryKey()
-
-End Function
-
-
-Private Function SetEntityInfoRelatedColumns(ByRef entityInfos As Collection)
-    Dim EntityInfo As Collection, col As ADOX.Column, ky As ADOX.Key, tbl As ADOX.Table, prop As Collection
-    
-    For Each EntityInfo In entityInfos
-        Set tbl = EntityInfo(EC_KEY_ENTITY_ADOX_TABLE)
-        For Each ky In tbl.Keys
-            If ky.Type <> adKeyForeign Then
-            Else
-                For Each col In ky.Columns
-                    Set prop = GetPropertyInfoByInverseProperty(ky.RelatedTable, col)
-                    Call EntityInfo(EC_KEY_ENTITY_PROPERTIES).Add(prop, prop(EC_KEY_ENTITY_PROPERTY_NAME))
-                    Set prop = GetPropertyInfoByForeignKey(tbl.Name, col)
-                    Call entityInfos(ky.RelatedTable).Item(EC_KEY_ENTITY_PROPERTIES).Add(prop, prop(EC_KEY_ENTITY_PROPERTY_NAME))
-                Next
-            End If
-        Next
-    Next
-    
 End Function
 
 Private Function GetPropertyInfoByColumn(col As ADOX.Column)
@@ -642,29 +695,143 @@ Private Function GetPropertyInfoByColumn(col As ADOX.Column)
     propertyTypeName = GetEntityPropertyTypeBy(col)
 
     Dim prop As New Collection
-    Call prop.Add(propertyName, EC_KEY_ENTITY_PROPERTY_NAME)
-    Call prop.Add(propertyFieldName, EC_KEY_ENTITY_FIELD_NAME)
-    Call prop.Add(propertyTypeName, EC_KEY_ENTITY_PROPERTY_TYPE)
-    Call prop.Add(False, EC_KEY_ENTITY_IS_PROPERTY_RELATED)
-    Call prop.Add(col, EC_KEY_ENTITY_ADOX_COLUMN)
+    Call prop.Add(propertyName, ENTIINFO_PROPERTY_NAME)
+    Call prop.Add(propertyTypeName, ENTIINFO_PROPERTY_TYPE)
+    Call prop.Add(propertyFieldName, ENTIINFO_PROPERTY_FIELD_NAME)
+'    Call prop.Add(False, KEY_ENTITY_IS_PROPERTY_RELATED)
+'    Call prop.Add(col, KEY_DB_ADOX_COLUMN)
+    Call prop.Add(col.Name, ENTIINFO_DB_FIELD_NAME)
+'    Call prop.Add(col.Type, ENTIINFO_DB_FIELD_TYPE)
     
     Set GetPropertyInfoByColumn = prop
 End Function
 
-
-Private Function GetIsAutoNumberField(col As ADOX.Column, table_name As String) As Boolean
-    Dim qry As String
+Private Function SetPropertyInfoOfRelatedTabel(props As Collection, base_table As ADOX.Table, base_column As ADOX.Column) As Collection
+    Dim tbl As ADOX.Table, ky As ADOX.Key, col As ADOX.Column, prop As Collection
     
-    If ProviderHasSchema Then
-        qry = "SELECT c.name AS ColumnName " & "FROM sys.columns c " & "INNER JOIN sys.tables t ON c.object_id = t.object_id " & "INNER JOIN sys.schemas s ON t.schema_id = s.schema_id " & _
-             "WHERE t.name = '" & table_name & "' " & "AND s.name = '" & schemaName_ & "' " & "AND c.is_identity = 1;"
-        GetIsAutoNumberField = Replace(cn_.Execute(qry).GetString(RowDelimeter:=","), ",", "") = col.Name
-    Else
-        GetIsAutoNumberField = col.Properties(EC_KEY_DB_AUTOINCREMENT)
-    End If
+    For Each tbl In catalog_.Tables
+        If tbl.Name = base_table.Name Then
+            For Each ky In tbl.Keys
+                If ky.Type = adKeyForeign Then
+                    For Each col In ky.Columns
+                        If col.Name = base_column.Name Then
+                            If IsPrimaryKeyBy(catalog_.Tables(ky.RelatedTable).Indexes, catalog_.Tables(ky.RelatedTable).Columns(col.RelatedColumn)) Then
+                                Set prop = GetPropertyInfoOfRelatedEntity(ky.RelatedTable)
+                                Call props.Add(prop, Key:=prop(ENTIINFO_PROPERTY_NAME))
+                            Else
+                                Set prop = GetPropertyInfoOfRelatedEntities(ky.RelatedTable)
+                                Call props.Add(prop, Key:=prop(ENTIINFO_PROPERTY_NAME))
+                            End If
+                        End If
+                    Next
+                End If
+            Next
+        Else
+            For Each ky In tbl.Keys
+                If ky.RelatedTable = base_table.Name And ky.Type = adKeyForeign Then
+                    For Each col In ky.Columns
+                        If col.RelatedColumn = base_column.Name Then
+                            If IsPrimaryKeyBy(base_table.Indexes, base_column) Then
+                                Set prop = GetPropertyInfoOfRelatedEntities(tbl.Name)
+                                Call props.Add(prop, Key:=prop(ENTIINFO_PROPERTY_NAME))
+                            Else
+                                Set prop = GetPropertyInfoOfRelatedEntity(tbl.Name)
+                                Call props.Add(prop, Key:=prop(ENTIINFO_PROPERTY_NAME))
+                            End If
+                        End If
+                    Next
+                
+                End If
+            
+            Next
+        End If
+    Next
+    
+    ' todo case of T-SQL
+    Dim qry As String
+    qry = "SELECT fk.CONSTRAINT_NAME AS ForeignKey, fk.TABLE_NAME AS ChildTable, fk.COLUMN_NAME AS ChildColumn, pk.TABLE_NAME AS ParentTable, pk.COLUMN_NAME AS ParentColumn " & _
+        "FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS rc JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS fk " & _
+        "ON rc.CONSTRAINT_NAME = fk.CONSTRAINT_NAME JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS pk ON rc.UNIQUE_CONSTRAINT_NAME = pk.CONSTRAINT_NAME Order BY ChildTable, ForeignKey;"
+    
     
 End Function
 
+Private Function GetPropertyInfoOfRelatedEntity(table_name As String)
+    Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
+
+    propertyName = ConvertDbTableNameToEntityClassName(table_name)
+    propertyFieldName = ConvertDBFieldNameToClassFieldName(table_name)
+    propertyTypeName = propertyName
+    
+    Dim prop As New Collection
+    Call prop.Add(propertyName, ENTIINFO_PROPERTY_NAME)
+    Call prop.Add(propertyFieldName, ENTIINFO_PROPERTY_FIELD_NAME)
+    Call prop.Add(propertyTypeName, ENTIINFO_PROPERTY_TYPE)
+'    Call prop.Add(col, KEY_DB_ADOX_COLUMN)
+    Call prop.Add("", ENTIINFO_DB_FIELD_NAME)
+    
+'    Call prop.Add(True, KEY_ENTITY_IS_PROPERTY_RELATED)
+'    Call prop.Add(base_table_name, KEY_DB_RELATED_TABLE_NAME)
+'    Call prop.Add(base_field_name, KEY_DB_RELATED_FIELD_NAME)
+'    Call prop.Add(table_name, KEY_DB_BASE_KEY_TABLE_NAME)
+'    Call prop.Add(related_field_name, KEY_DB_BASE_KEY_FIELD_NAME)
+    
+    Call prop.Add(False, ENTIINFO_DB_IS_INDEX)
+    Call prop.Add(False, ENTIINFO_DB_IS_PRIMARY_KEY)
+'   Call prop.Add(false, ENTIINFO_DB_IS_UNIQUE_KEY)
+    Call prop.Add(False, ENTIINFO_DB_IS_AUTOINCREMENT)
+    
+    Set GetPropertyInfoOfRelatedEntity = prop
+End Function
+
+Private Function GetPropertyInfoOfRelatedEntities(related_table_name As String)
+    Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
+
+    propertyName = ConvertDbTableNameToEntitesClassName(related_table_name)
+    propertyFieldName = ConvertDbTableNameToEntitiesClassFieldName(related_table_name)
+    propertyTypeName = propertyName
+    
+    Dim prop As New Collection
+    Call prop.Add(propertyName, ENTIINFO_PROPERTY_NAME)
+    Call prop.Add(propertyFieldName, ENTIINFO_PROPERTY_FIELD_NAME)
+    Call prop.Add(propertyTypeName, ENTIINFO_PROPERTY_TYPE)
+'    Call prop.Add(col, KEY_DB_ADOX_COLUMN)
+    Call prop.Add("", ENTIINFO_DB_FIELD_NAME)
+    
+'    Call prop.Add(True, KEY_ENTITY_IS_PROPERTY_RELATED)
+'    Call prop.Add(base_table_name, KEY_DB_RELATED_TABLE_NAME)
+'    Call prop.Add(base_field_name, KEY_DB_RELATED_FIELD_NAME)
+'    Call prop.Add(related_table_name, KEY_DB_BASE_KEY_TABLE_NAME)
+'    Call prop.Add(related_field_name, KEY_DB_BASE_KEY_FIELD_NAME)
+   
+    Call prop.Add(False, ENTIINFO_DB_IS_INDEX)
+    Call prop.Add(False, ENTIINFO_DB_IS_PRIMARY_KEY)
+'   Call prop.Add(false, ENTIINFO_DB_IS_UNIQUE_KEY)
+    Call prop.Add(False, ENTIINFO_DB_IS_AUTOINCREMENT)
+    
+    Set GetPropertyInfoOfRelatedEntities = prop
+End Function
+
+
+Private Function SetEntityInfoRelatedColumns(ByRef entityInfos As Collection)
+    Dim EntityInfo As Collection, col As ADOX.Column, ky As ADOX.Key, tbl As ADOX.Table, prop As Collection
+    
+    For Each EntityInfo In entityInfos
+        Set tbl = EntityInfo(KEY_ENTITY_ADOX_TABLE)
+        For Each ky In tbl.Keys
+            If ky.Type <> adKeyForeign Then
+            Else
+                For Each col In ky.Columns
+                    Set prop = GetPropertyInfoByInverseProperty(ky.RelatedTable, col)
+                    Call EntityInfo(KEY_ENTITY_PROPERTIES).Add(prop, prop(KEY_ENTITY_PROPERTY_NAME))
+                    Set prop = GetPropertyInfoByForeignKey(tbl.Name, col)
+                    Call entityInfos(ky.RelatedTable).Item(KEY_ENTITY_PROPERTIES).Add(prop, prop(KEY_ENTITY_PROPERTY_NAME))
+                Next
+            End If
+        Next
+    Next
+    
+End Function
 
 Private Function GetPropertyInfoByForeignKey(key_table_name As String, col As ADOX.Column)
     Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
@@ -674,16 +841,16 @@ Private Function GetPropertyInfoByForeignKey(key_table_name As String, col As AD
     propertyTypeName = propertyName
     
     Dim prop As New Collection
-    Call prop.Add(propertyName, EC_KEY_ENTITY_PROPERTY_NAME)
-    Call prop.Add(propertyFieldName, EC_KEY_ENTITY_FIELD_NAME)
-    Call prop.Add(propertyTypeName, EC_KEY_ENTITY_PROPERTY_TYPE)
-    Call prop.Add(True, EC_KEY_ENTITY_IS_PROPERTY_RELATED)
-    Call prop.Add(col, EC_KEY_ENTITY_ADOX_COLUMN)
-    Call prop.Add(col.Name, EC_KEY_DB_FIELD_NAME)
-    Call prop.Add(col.RelatedColumn, EC_KEY_ENTITY_FOREIGNKEY)
-    Call prop.Add(key_table_name, EC_KEY_ENTITY_FOREIGN_TABLE)
-    Call prop.Add("", EC_KEY_ENTITY_INVERSE_FOREIGNKEY)
-    Call prop.Add("", EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE)
+    Call prop.Add(propertyName, KEY_ENTITY_PROPERTY_NAME)
+    Call prop.Add(propertyFieldName, KEY_ENTITY_FIELD_NAME)
+    Call prop.Add(propertyTypeName, KEY_ENTITY_PROPERTY_TYPE)
+    Call prop.Add(True, KEY_ENTITY_IS_PROPERTY_RELATED)
+    Call prop.Add(col, KEY_DB_ADOX_COLUMN)
+    Call prop.Add(col.Name, KEY_DB_FIELD_NAME)
+    Call prop.Add(col.RelatedColumn, KEY_ENTITY_FOREIGNKEY)
+    Call prop.Add(key_table_name, KEY_ENTITY_FOREIGN_TABLE)
+    Call prop.Add("", KEY_ENTITY_INVERSE_FOREIGNKEY)
+    Call prop.Add("", KEY_ENTITY_INVERSE_FOREIGN_TABLE)
     
     Set GetPropertyInfoByForeignKey = prop
 End Function
@@ -696,65 +863,99 @@ Private Function GetPropertyInfoByInverseProperty(key_table_name As String, col 
     propertyTypeName = propertyName
     
     Dim prop As New Collection
-    Call prop.Add(propertyName, EC_KEY_ENTITY_PROPERTY_NAME)
-    Call prop.Add(propertyFieldName, EC_KEY_ENTITY_FIELD_NAME)
-    Call prop.Add(propertyTypeName, EC_KEY_ENTITY_PROPERTY_TYPE)
-    Call prop.Add(True, EC_KEY_ENTITY_IS_PROPERTY_RELATED)
-    Call prop.Add(col.RelatedColumn, EC_KEY_DB_FIELD_NAME)
-    Call prop.Add("", EC_KEY_ENTITY_FOREIGNKEY)
-    Call prop.Add("", EC_KEY_ENTITY_FOREIGN_TABLE)
-    Call prop.Add(col.Name, EC_KEY_ENTITY_INVERSE_FOREIGNKEY)
-    Call prop.Add(key_table_name, EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE)
-    Call prop.Add(col, EC_KEY_ENTITY_ADOX_COLUMN)
+    Call prop.Add(propertyName, KEY_ENTITY_PROPERTY_NAME)
+    Call prop.Add(propertyFieldName, KEY_ENTITY_FIELD_NAME)
+    Call prop.Add(propertyTypeName, KEY_ENTITY_PROPERTY_TYPE)
+    Call prop.Add(True, KEY_ENTITY_IS_PROPERTY_RELATED)
+    Call prop.Add(col.RelatedColumn, KEY_DB_FIELD_NAME)
+    Call prop.Add("", KEY_ENTITY_FOREIGNKEY)
+    Call prop.Add("", KEY_ENTITY_FOREIGN_TABLE)
+    Call prop.Add(col.Name, KEY_ENTITY_INVERSE_FOREIGNKEY)
+    Call prop.Add(key_table_name, KEY_ENTITY_INVERSE_FOREIGN_TABLE)
+    Call prop.Add(col, KEY_DB_ADOX_COLUMN)
     
     Set GetPropertyInfoByInverseProperty = prop
 End Function
 
 
-Private Function CreateDbContext(tableEntityInfos As Collection, dbcontext_name As String)
-    Dim codeDbcClass As String
+Private Function GetIsAutoNumberField(col As ADOX.Column, table_name As String) As Boolean
+    Dim qry As String
     
-    codeDbcClass = GetDbContextCode(tableEntityInfos, dbcontext_name)
-    If isExportFiles_ Then
-        AddClassModuleFromFile "DBContext", codeDbcClass
+    If ProviderHasSchema Then
+        qry = "SELECT c.name AS ColumnName " & "FROM sys.columns c " & "INNER JOIN sys.tables t ON c.object_id = t.object_id " & "INNER JOIN sys.schemas s ON t.schema_id = s.schema_id " & _
+             "WHERE t.name = '" & table_name & "' " & "AND s.name = '" & schemaName_ & "' " & "AND c.is_identity = 1;"
+        GetIsAutoNumberField = Replace(cn_.Execute(qry).GetString(RowDelimeter:=","), ",", "") = col.Name
     Else
-    
+        GetIsAutoNumberField = col.Properties(KEY_DB_AUTOINCREMENT)
     End If
     
+End Function
+
+
+'Private Function GetPropertyInfoByForeignKey(key_table_name As String, col As ADOX.Column)
+'    Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
+'
+'    propertyName = ConvertDbTableNameToEntitesClassName(key_table_name)
+'    propertyFieldName = ConvertDbTableNameToEntitiesClassFieldName(key_table_name)
+'    propertyTypeName = propertyName
+'
+'    Dim prop As New Collection
+'    Call prop.Add(propertyName, KEY_ENTITY_PROPERTY_NAME)
+'    Call prop.Add(propertyFieldName, KEY_ENTITY_FIELD_NAME)
+'    Call prop.Add(propertyTypeName, KEY_ENTITY_PROPERTY_TYPE)
+'    Call prop.Add(True, KEY_ENTITY_IS_PROPERTY_RELATED)
+'    Call prop.Add(col, KEY_DB_ADOX_COLUMN)
+'    Call prop.Add(col.Name, KEY_DB_FIELD_NAME)
+'    Call prop.Add(col.RelatedColumn, KEY_ENTITY_FOREIGNKEY)
+'    Call prop.Add(key_table_name, KEY_ENTITY_FOREIGN_TABLE)
+'    Call prop.Add("", KEY_ENTITY_INVERSE_FOREIGNKEY)
+'    Call prop.Add("", KEY_ENTITY_INVERSE_FOREIGN_TABLE)
+'
+'    Set GetPropertyInfoByForeignKey = prop
+'End Function
+
+
+Private Function CreateDbContext(entity_Infos As Collection, dbcontext_name As String)
+    Dim codeDbcClass As String
+    
+    codeDbcClass = GetDbContextCode(entity_Infos, dbcontext_name)
+    If isExportFiles_ Then
+        Call AddClassModuleFromFile("DBContext", codeDbcClass)
+    Else
+    End If
 
 End Function
 
-Private Function CreateEntityClassFromTableName(tableEntityInfo As Collection)
+Private Function CreateEntityClassFromTableName(entityInfos As Collection)
     Dim EntityClass As Object, EntitiesClass As Object, codeEntityClass As String, codeEntitiesClass As String
         
-    codeEntityClass = GetEntityCode(tableEntityInfo(EC_KEY_ENTITY_NAME), tableEntityInfo(EC_KEY_ENTITY_PROPERTIES))
-    codeEntitiesClass = GetEntitesCode(tableEntityInfo(EC_KEY_ENTITIES_NAME), tableEntityInfo(EC_KEY_ENTITY_NAME))
+    codeEntityClass = GetEntityCode(entityInfos(ENTIINFO_ENTITY_NAME), entityInfos(ENTIINFO_PROPERTIES))
+    codeEntitiesClass = GetEntitesCode(entityInfos(ENTIINFO_ENTITIES_NAME), entityInfos(ENTIINFO_ENTITY_NAME))
     
     If isExportFiles_ Then
         ' option1 using write file and import file. to using attribute key word in class module.
-        Call AddClassModuleFromFile(tableEntityInfo(EC_KEY_ENTITY_NAME), codeEntityClass)
-        Call AddClassModuleFromFile(tableEntityInfo(EC_KEY_ENTITIES_NAME), codeEntitiesClass)
+        Call AddClassModuleFromFile(entityInfos(ENTIINFO_ENTITY_NAME), codeEntityClass)
+        Call AddClassModuleFromFile(entityInfos(ENTIINFO_ENTITIES_NAME), codeEntitiesClass)
         
     Else
         ' option2 using CodeModule.Insertlines()
         ' only force update (delete all and re-insert)
-        Set EntityClass = AddClassModule(tableEntityInfo(EC_KEY_ENTITY_NAME))
-        EntityClass.CodeModule.DeleteLines 1, EntityClass.CodeModule.CountOfLines
-        EntityClass.CodeModule.InsertLines 1, codeEntityClass
+        Set EntityClass = AddClassModule(entityInfos(ENTIINFO_ENTITY_NAME))
+        Call EntityClass.CodeModule.DeleteLines(1, EntityClass.CodeModule.CountOfLines)
+        Call EntityClass.CodeModule.InsertLines(1, codeEntityClass)
         
-        Set EntitiesClass = AddClassModule(tableEntityInfo(EC_KEY_ENTITIES_NAME))
-        EntitiesClass.CodeModule.DeleteLines 1, EntitiesClass.CodeModule.CountOfLines
-        EntitiesClass.CodeModule.InsertLines 1, codeEntitiesClass
+        Set EntitiesClass = AddClassModule(entityInfos(ENTIINFO_ENTITIES_NAME))
+        Call EntitiesClass.CodeModule.DeleteLines(1, EntitiesClass.CodeModule.CountOfLines)
+        Call EntitiesClass.CodeModule.InsertLines(1, codeEntitiesClass)
     End If
-    
 End Function
 
-Private Function AddClassModuleFromFile(className, codes)
+Private Function AddClassModuleFromFile(className As String, codes As String)
     Dim classFilePath As String
     classFilePath = ThisWorkbook.Path & "\" & className & ".cls"
-    CreateClassModuleFile classFilePath, codes
-    ImportClassModuleFile classFilePath, className
-    DeleteClassModuleFile classFilePath
+    Call CreateClassModuleFile(classFilePath, codes)
+    Call ImportClassModuleFile(classFilePath, className)
+    Call DeleteClassModuleFile(classFilePath)
 End Function
 
 Private Function DeleteClassModuleFile(classFilePath)
@@ -810,7 +1011,7 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
     Dim texts As New Collection, str As String, txt, tmp As String
     Dim info As Collection, prop As Collection
     Const db_table_name As String = "DBTableName"
-
+    
     On Error Resume Next
     With texts
         If isExportFiles_ Then
@@ -896,32 +1097,34 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add ""
         For Each info In infos
             tmp = "    Set info = ec_.CreateDbInfoBy( "
-            tmp = tmp & "  table_name    :=""" & info(EC_KEY_DB_TABLE_NAME) & """"
-            tmp = tmp & ", sql_table_name:=""" & info(EC_KEY_SQL_TABLE_NAME) & """"
-            tmp = tmp & ", entity_name   :=""" & info(EC_KEY_ENTITY_NAME) & """"
-            tmp = tmp & ", entities_name :=""" & info(EC_KEY_ENTITIES_NAME) & """"
-            tmp = tmp & ", primary_key   :=""" & GetPrimaryKeyNameByIndexes(info(EC_KEY_ENTITY_ADOX_TABLE).Indexes) & """"
+            tmp = tmp & "  table_name    :=""" & info(ENTIINFO_DB_TABLE_NAME) & """"
+            tmp = tmp & ", sql_table_name:=""" & info(ENTIINFO_DB_SQL_TABLE_NAME) & """"
+'            tmp = tmp & ", entity_name   :=""" & info(KEY_ENTITY_NAME) & """"
+'            tmp = tmp & ", entities_name :=""" & info(KEY_ENTITIES_NAME) & """"
+'            tmp = tmp & ", primary_key   :=""" & info(ENTIINFO_DB_IS_PRIMARY_KEY) & """"
             tmp = tmp & ")"
             .Add tmp
-            
             .Add ""
             .Add "    Set props = New Collection"
-            For Each prop In info("Properties")
+            For Each prop In info(ENTIINFO_PROPERTIES)
                 tmp = "    Set prop = ec_.CreateDbInfoPropertyBy("
-                tmp = tmp & "  property_name:=""" & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """"
-                tmp = tmp & ", entity_property_type:=""" & prop(EC_KEY_ENTITY_PROPERTY_TYPE) & """"
-                tmp = tmp & ", db_field_name:=""" & prop(EC_KEY_ENTITY_ADOX_COLUMN).Name & """"
-                tmp = tmp & IIf(prop(EC_KEY_DB_AUTOINCREMENT), ", auto_increment:=" & prop(EC_KEY_DB_AUTOINCREMENT), "")
-                tmp = tmp & ", foreign_key:=""" & prop(EC_KEY_ENTITY_FOREIGNKEY) & """"
-                tmp = tmp & ", foreign_table:=""" & prop(EC_KEY_ENTITY_FOREIGN_TABLE) & """"
-                tmp = tmp & ", inverse_foreign_key:=""" & prop(EC_KEY_ENTITY_INVERSE_FOREIGNKEY) & """"
-                tmp = tmp & ", inverse_foreign_table:=""" & prop(EC_KEY_ENTITY_INVERSE_FOREIGN_TABLE) & """"
+                tmp = tmp & "   property_name:=""" & prop(ENTIINFO_PROPERTY_NAME) & """"
+                tmp = tmp & IIf(prop(ENTIINFO_DB_FIELD_NAME) <> "", ",  db_field_name:=""" & prop(ENTIINFO_DB_FIELD_NAME) & """", "")
+'                tmp = tmp & ", entity_property_type:=""" & prop(KEY_ENTITY_PROPERTY_TYPE) & """"
+                tmp = tmp & IIf(prop(ENTIINFO_DB_IS_AUTOINCREMENT), ", auto_increment:=" & prop(ENTIINFO_DB_IS_AUTOINCREMENT), "")
+                tmp = tmp & IIf(prop(ENTIINFO_DB_IS_PRIMARY_KEY), ", primary_key:=" & prop(ENTIINFO_DB_IS_PRIMARY_KEY), "")
+                tmp = tmp & IIf(prop(ENTIINFO_DB_IS_UNIQUE_KEY), ", unique_key:=" & prop(ENTIINFO_DB_IS_UNIQUE_KEY), "")
+'                tmp = tmp & ", foreign_key:=""" & prop(KEY_ENTITY_FOREIGNKEY) & """"
+'                tmp = tmp & ", foreign_table:=""" & prop(KEY_ENTITY_FOREIGN_TABLE) & """"
+'                tmp = tmp & ", inverse_foreign_key:=""" & prop(KEY_ENTITY_INVERSE_FOREIGNKEY) & """"
+'                tmp = tmp & ", inverse_foreign_table:=""" & prop(KEY_ENTITY_INVERSE_FOREIGN_TABLE) & """"
+'                tmp = tmp & ", primary_key   :=""" & info(ENTIINFO_DB_IS_INDEX) & """"
                 tmp = tmp & ")"
                 .Add tmp
-                .Add "    Call props.Add(prop, """ & prop(EC_KEY_ENTITY_PROPERTY_NAME) & """)"
+                .Add "    Call props.Add(prop, """ & prop(ENTIINFO_PROPERTY_NAME) & """)"
             Next
-            .Add "    Call info.Add(props, """ & EC_KEY_ENTITY_PROPERTIES & """)"
-            .Add "    Call infos.Add(info, """ & info(EC_KEY_ENTITY_NAME) & """)"
+            .Add "    Call info.Add(props, """ & ENTIINFO_PROPERTIES & """)"
+            .Add "    Call infos.Add(info, """ & info(ENTIINFO_ENTITY_NAME) & """)"
             .Add ""
             .Add ""
         Next
@@ -932,7 +1135,7 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add "Public Function CreateObjectBy(class_name As String) As Object"
         .Add "    Select Case class_name"
         For Each info In infos
-            .Add "        Case """ & info(EC_KEY_ENTITY_NAME) & """: Set CreateObjectBy = New " & info(EC_KEY_ENTITY_NAME)
+            .Add "        Case """ & info(ENTIINFO_ENTITY_NAME) & """: Set CreateObjectBy = New " & info(ENTIINFO_ENTITY_NAME)
         Next
         .Add "    End Select"
         .Add "End Function"
@@ -941,6 +1144,37 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
 
     For Each txt In texts: str = str + txt + vbCrLf: Next
     GetDbContextCode = str
+End Function
+
+Private Function IsIndexKeyBy(adox_indexes As ADOX.Indexes, adox_column As ADOX.Column) As Boolean
+    Dim adox_index As ADOX.Index, col As ADOX.Column
+    For Each adox_index In adox_indexes
+        For Each col In adox_index.Columns
+            If col.Name = adox_column.Name Then IsIndexKeyBy = True
+        Next
+    Next
+End Function
+
+Private Function IsPrimaryKeyBy(adox_indexes As ADOX.Indexes, adox_column As ADOX.Column) As Boolean
+    Dim adox_index As ADOX.Index, col As ADOX.Column
+    For Each adox_index In adox_indexes
+        If adox_index.PrimaryKey Then
+            For Each col In adox_index.Columns
+                If col.Name = adox_column.Name Then IsPrimaryKeyBy = True
+            Next
+        End If
+    Next
+End Function
+
+Private Function IsUniqueKeyBy(adox_indexes As ADOX.Indexes, adox_column As ADOX.Column) As Boolean
+    Dim adox_index As ADOX.Index, col As ADOX.Column
+    For Each adox_index In adox_indexes
+        If adox_index.Unique Then
+            For Each col In adox_index.Columns
+                If col.Name = adox_column.Name Then IsUniqueKeyBy = True
+            Next
+        End If
+    Next
 End Function
 
 Private Function GetPrimaryKeyNameByIndexes(adox_indexes As ADOX.Indexes) As String
@@ -952,7 +1186,7 @@ End Function
 
 
 Private Function GetEntitesCode(entitiesName As String, entityName As String) As String
-    Dim texts As New Collection, str As String, txt
+    Dim texts As New Collection, str As String, txt As Variant
 
     With texts
         If isExportFiles_ Then
@@ -1005,8 +1239,10 @@ Private Function GetEntitesCode(entitiesName As String, entityName As String) As
     GetEntitesCode = str
 End Function
 
-Private Function GetEntityCode(entityName As String, propertyInfo As Collection) As String
-    Dim texts As New Collection, pInfo, str As String, txt
+
+
+Private Function GetEntityCode(entityName As String, props As Collection) As String
+    Dim texts As New Collection, prop As Collection, str As String, txt As Variant
 
     With texts
         If isExportFiles_ Then
@@ -1022,28 +1258,28 @@ Private Function GetEntityCode(entityName As String, propertyInfo As Collection)
         End If
         .Add "Option Explicit"
         .Add ""
-        For Each pInfo In propertyInfo
-            If pInfo(EC_KEY_ENTITY_IS_PROPERTY_RELATED) = False Then
-                .Add "Private " & pInfo(EC_KEY_ENTITY_FIELD_NAME) & " as " & pInfo(EC_KEY_ENTITY_PROPERTY_TYPE)
+        For Each prop In props
+            If IsTypeLet(prop(ENTIINFO_PROPERTY_TYPE)) Then
+                .Add "Private " & prop(ENTIINFO_PROPERTY_FIELD_NAME) & " as " & prop(ENTIINFO_PROPERTY_TYPE)
             Else
-                .Add "Private " & pInfo(EC_KEY_ENTITY_FIELD_NAME) & " as New " & pInfo(EC_KEY_ENTITY_PROPERTY_TYPE)
+                .Add "Private " & prop(ENTIINFO_PROPERTY_FIELD_NAME) & " as New " & prop(ENTIINFO_PROPERTY_TYPE)
             End If
         Next
         .Add ""
-        For Each pInfo In propertyInfo
-            If pInfo(EC_KEY_ENTITY_IS_PROPERTY_RELATED) = False Then
-                .Add "Public Property Get " & pInfo(EC_KEY_ENTITY_PROPERTY_NAME) & "() as " & pInfo(EC_KEY_ENTITY_PROPERTY_TYPE)
-                .Add "    Let " & pInfo(EC_KEY_ENTITY_PROPERTY_NAME) & " = " & pInfo(EC_KEY_ENTITY_FIELD_NAME)
+        For Each prop In props
+            If IsTypeLet(prop(ENTIINFO_PROPERTY_TYPE)) Then
+                .Add "Public Property Get " & prop(ENTIINFO_PROPERTY_NAME) & "() as " & prop(ENTIINFO_PROPERTY_TYPE)
+                .Add "    Let " & prop(ENTIINFO_PROPERTY_NAME) & " = " & prop(ENTIINFO_PROPERTY_FIELD_NAME)
                 .Add "End Property"
-                .Add "Public Property Let " & pInfo(EC_KEY_ENTITY_PROPERTY_NAME) & "(val as " & pInfo(EC_KEY_ENTITY_PROPERTY_TYPE) & ")"
-                .Add "    Let " & pInfo(EC_KEY_ENTITY_FIELD_NAME) & " = val"
+                .Add "Public Property Let " & prop(ENTIINFO_PROPERTY_NAME) & "(val as " & prop(ENTIINFO_PROPERTY_TYPE) & ")"
+                .Add "    Let " & prop(ENTIINFO_PROPERTY_FIELD_NAME) & " = val"
                 .Add "End Property"
             Else
-                .Add "Public Property Get " & pInfo(EC_KEY_ENTITY_PROPERTY_NAME) & "() as " & pInfo(EC_KEY_ENTITY_PROPERTY_TYPE)
-                .Add "    Set " & pInfo(EC_KEY_ENTITY_PROPERTY_NAME) & " = " & pInfo(EC_KEY_ENTITY_FIELD_NAME)
+                .Add "Public Property Get " & prop(ENTIINFO_PROPERTY_NAME) & "() as " & prop(ENTIINFO_PROPERTY_TYPE)
+                .Add "    Set " & prop(ENTIINFO_PROPERTY_NAME) & " = " & prop(ENTIINFO_PROPERTY_FIELD_NAME)
                 .Add "End Property"
-                .Add "Public Property Set " & pInfo(EC_KEY_ENTITY_PROPERTY_NAME) & "(val as Variant)"
-                .Add "    Set " & pInfo(EC_KEY_ENTITY_FIELD_NAME) & " = val"
+                .Add "Public Property Set " & prop(ENTIINFO_PROPERTY_NAME) & "(val as Variant)"
+                .Add "    Set " & prop(ENTIINFO_PROPERTY_FIELD_NAME) & " = val"
                 .Add "End Property"
             End If
         Next
@@ -1064,6 +1300,21 @@ Private Function GetPropertyByName(props As ADOX.Properties, property_name As St
 
 End Function
 
+
+Private Function IsTypeLet(type_name As String) As Boolean
+    Select Case type_name
+        Case "Variant": IsTypeLet = True
+        Case "Boolean": IsTypeLet = True
+        Case "String": IsTypeLet = True
+        Case "Date": IsTypeLet = True
+        Case "Long": IsTypeLet = True
+        Case "Double": IsTypeLet = True
+        Case "Integer": IsTypeLet = True
+        Case "Single": IsTypeLet = True
+        Case "Decimal": IsTypeLet = True
+        Case "Currency": IsTypeLet = True
+    End Select
+End Function
 
 Private Function GetEntityPropertyTypeBy(col As ADOX.Column) As String
     Dim propertyTypeName As String, fieldType As ADODB.DataTypeEnum
@@ -1110,7 +1361,7 @@ Private Function GetPropertyInfo(propertyFieldName, propertyName, propertyTypeNa
     Call prop.Add(isLet, "IsLet")
     Call prop.Add(fieldName, "DbFieldName")
     Call prop.Add(relatedfieldName, "ForeignKey")
-    Call prop.Add("", EC_KEY_TABLE_PRIMARY_KEY)
+    Call prop.Add("", KEY_TABLE_PRIMARY_KEY)
     Set GetPropertyInfo = prop
 
 End Function
@@ -1211,5 +1462,58 @@ Private Function CollectionToArray(col As Collection)
        i = i + 1
     Next
     CollectionToArray = arr
+End Function
+
+
+
+Private Function GetEntityNameByDbTableName(dbInfos As Collection, table_name As String) As String
+    Dim DbInfo As Collection
+    For Each DbInfo In dbInfos
+        If DbInfo(KEY_DB_TABLE_NAME) = table_name Then GetEntityNameByDbTableName = DbInfo(KEY_ENTITY_NAME): Exit Function
+    Next
+End Function
+Private Function GetPropertyNameByDbTableFieldName(dbInfos As Collection, table_name As String, field_name As String) As String
+    Dim DbInfo As Collection, prop As Collection
+    For Each DbInfo In dbInfos
+        If DbInfo(DBINFO_TABLE_NAME) = table_name Then
+            For Each prop In DbInfo(DBINFO_PROPERTIES)
+                If prop(DBINFO_FIELD_NAME) = field_name Then GetPropertyNameByDbTableFieldName = prop(DBINFO_PROPERTY_NAME): Exit Function
+            Next
+        End If
+    Next
+End Function
+
+Private Function GetRelatedPropertyNameByDbTableFieldName(table_name As String, field_name As String)
+    Dim tbl As ADOX.Table, ky As ADOX.Key, col As ADOX.Column
+    
+    For Each ky In catalog_.Tables(table_name).Keys
+        If ky.Type = adKeyForeign Then
+            For Each col In ky.Columns
+                If col.Name = field_name Then GetRelatedPropertyNameByDbTableFieldName = GetPropertyNameByDbTableFieldName(dbInfos, tble_name, field_name)
+            Next
+        End If
+    Next
+    
+    
+End Function
+
+
+Private Function FetchRecordSetByQuery(query_string As String) As ADODB.Recordset
+    If cn_.State <> adStateOpen Then cn_.Open
+    Set FetchRecordSetByQuery = New ADODB.Recordset
+    FetchRecordSetByQuery.CursorLocation = adUseClient
+    Call FetchRecordSetByQuery.Open(query_string, cn_, LockType:=adLockReadOnly, CursorType:=adOpenStatic)
+End Function
+
+
+Private Function IsCollection(col As Variant) As Boolean
+    Dim c
+    On Error GoTo errFalse
+    For Each c In col
+    Next
+    IsCollection = True
+    Exit Function
+errFalse:
+    IsCollection = False
 End Function
 

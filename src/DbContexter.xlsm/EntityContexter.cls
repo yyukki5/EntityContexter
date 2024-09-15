@@ -95,6 +95,7 @@ Private catalog_ As ADOX.Catalog
 Private isExportFiles_ As Boolean
 Private schemaName_ As String
 Private connectionString_ As String
+Private isTransactionActive_ As Boolean
 
 Private baseEntityName_ As String
 Private includedEntityNames_ As Collection
@@ -129,8 +130,9 @@ Public Function Initialize(connectionString As String) As EntityContexter
 End Function
 
 Private Sub Class_Terminate()
+    DisconnectDb
     If catalog_ Is Nothing Then Else Set catalog_ = Nothing
-    If cn_ Is Nothing Then Else If cn_.State > 0 Then cn_.Close
+    If cn_ Is Nothing Then Else Set cn_ = Nothing
 End Sub
 
 ' Properties -------------------------------------------------------------------------------
@@ -324,6 +326,16 @@ errFetchQuery:
     
 End Function
 
+Public Function SaveChanges()
+On Error GoTo errCommit
+    Call CommitTransaction
+    Exit Function
+errCommit:
+    Call RollbackTransaction
+End Function
+
+
+
 Public Function Add(rec As Object)
     Dim rs As New ADODB.Recordset, prop As Collection
     Dim ent_name, is_related_field_index As Boolean, r As Object, v As Variant
@@ -335,22 +347,16 @@ On Error GoTo errOpen
     Call AddRelatedEntity(rec, dbInfo_)
                 
     If HasPrimaryKey(rec, dbInfo_) = False Then If ExistUniqueRecord(rec, dbInfo_) Then Call Err.Raise(10003, "EntityContexter.Add()", "Record is already exist")
-    Call cn_.BeginTrans
-On Error GoTo errTrans
+    Call BeginTransaction
     Call rs.Open(Source:=dbInfo_(TypeName(rec))(KEY_SQL_TABLE_NAME), ActiveConnection:=cn_, LockType:=adLockOptimistic)
     Call rs.AddNew(GetFieldsListByEntity(rec, dbInfo_), GetValuesListByEntity(rec, dbInfo_))
     Call SetAutoincrementFieldsValues(rs, rec, dbInfo_)
-    Call cn_.CommitTrans
     
-On Error GoTo errOpen
     Call AddRelatedEntities(rec, dbInfo_)
-
     Exit Function
 
-errTrans:
-    cn_.RollbackTrans
 errOpen:
-    If cn_.State <> adStateClosed Then Call cn_.Close
+    DisconnectDb
     Err.Raise Err.Number, Err.Source & vbCrLf & "EntityContexter.Add()", Err.Description
 End Function
 
@@ -441,15 +447,12 @@ On Error GoTo errOpen
     If HasPrimaryKey(rec, dbInfo_) = False Then Call Err.Raise(10001, "EntityContexter.Update()", "Table has no primary key")
     If ExistUniqueRecord(rec, dbInfo_) = False Then Call Err.Raise(10002, "EntityContexter.Update()", "Not found records")
     
-    Call cn_.BeginTrans
-On Error GoTo errTrans
+    Call BeginTransaction
     Call cn_.Execute(CommandText:=CreateUpdateQuery(rec, dbInfo_))
-    Call cn_.CommitTrans
     Exit Function
 
-errTrans:
-    cn_.RollbackTrans
 errOpen:
+    DisconnectDb
     Err.Raise Err.Number, Err.Source & vbCrLf & "EntityContexter.Update()", Err.Description
 End Function
 
@@ -461,15 +464,12 @@ On Error GoTo errOpen
     If HasPrimaryKey(rec, dbInfo_) = False Then Call Err.Raise(10001, "EntityContexter.Remove()", "Table has no primary key")
     If ExistUniqueRecord(rec, dbInfo_) = False Then Call Err.Raise(10002, "EntityContexter.Remove()", "Not found records")
     
-    Call cn_.BeginTrans
-On Error GoTo errTrans
+    Call BeginTransaction
     Call cn_.Execute(CommandText:=CreateDeleteQuery(rec, dbInfo_))
-    Call cn_.CommitTrans
     Exit Function
 
-errTrans:
-    cn_.RollbackTrans
 errOpen:
+    DisconnectDb
     Err.Raise Err.Number, Err.Source & vbCrLf & "EntityContexter.Remove()", Err.Description
 End Function
 
@@ -1193,18 +1193,21 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add "Public Function Add(rec As Object)"
         .Add ""
         .Add "    Call ec_.Add(rec)"
+        .Add "    Call ec_.SaveChanges(rec)"
         .Add ""
         .Add "End Function"
         .Add ""
         .Add "Public Function Update(rec As Object)"
         .Add ""
         .Add "    Call ec_.Update(rec)"
+        .Add "    Call ec_.SaveChanges(rec)"
         .Add ""
         .Add "End Function"
         .Add ""
         .Add "Public Function Remove(rec As Object)"
         .Add ""
         .Add "    Call ec_.Remove(rec)"
+        .Add "    Call ec_.SaveChanges(rec)"
         .Add ""
         .Add "End Function"
         .Add ""
@@ -1739,6 +1742,33 @@ Private Function IsRecordAllNullValue(record_array, entity_name As String, prop_
 
 End Function
 
+
+' connections -------------------------------------------------------------------------------------------------------------------------------------
+Private Function BeginTransaction()
+    If cn_.State <> adStateClosed And isTransactionActive_ = False Then
+        Call cn_.BeginTrans
+        isTransactionActive_ = True
+    End If
+End Function
+
+Private Function CommitTransaction()
+    If cn_.State <> adStateClosed And isTransactionActive_ Then
+        Call cn_.CommitTrans
+        isTransactionActive_ = False
+    End If
+End Function
+
+Private Function RollbackTransaction()
+    If cn_.State <> adStateClosed And isTransactionActive_ Then
+        Call cn_.RollbackTrans
+        isTransactionActive_ = False
+    End If
+End Function
+
+Private Function DisconnectDb()
+    Call RollbackTransaction
+    If cn_ Is Nothing Then Else If cn_.State > 0 Then cn_.Close
+End Function
 
 
 

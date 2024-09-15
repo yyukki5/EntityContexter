@@ -10,7 +10,7 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' Entity Contexer -----------------------------------------------------------------
-' Version   : 0.4.0
+' Version   : 0.5.0
 ' Project   : https://github.com/yyukki5/EntityContexter
 ' Depend on : Microsoft ActiveX Data Objects X.X Library, Microsoft ADO Ext. 2.8 for DDL and Security, Microsoft Scripting RunTime
 ' Before Using : Need to check "Trust access to the VBA project object model"
@@ -43,6 +43,7 @@ Private Const DBINFO_TABLE_NAME As String = "DbTableName"
 Private Const DBINFO_SQL_TABLE_NAME As String = "SQLTableName"
 Private Const DBINFO_PROPERTIES As String = "Properties"
 Private Const DBINFO_PROPERTY_NAME As String = "PropertyName"
+Private Const DBINFO_PROPERTY_TYPE_NAME As String = "PropertyTypeName"
 Private Const DBINFO_FIELD_NAME As String = "DbFieldName"
 Private Const DBINFO_FIELD_TYPE As String = "DbFieldType"
 Private Const DBINFO_IS_AUTONUMBER As String = "DbIsAutoNumber"
@@ -95,12 +96,23 @@ Private isExportFiles_ As Boolean
 Private schemaName_ As String
 Private connectionString_ As String
 
-Private fetchQuery_ As String
 Private baseEntityName_ As String
 Private includedEntityNames_ As Collection
 Private lastIncludedEntityProps_ As Collection
-Private lastSubQueryName_ As String
 Private fetchFieldNames_ As New Dictionary
+
+Private querySelect_ As String
+Private queryField_ As String
+Private queryFrom_ As String
+Private queryJoin_ As String
+Private queryWhere_ As String
+Private queryOrder_ As String
+Private lastIncludedEntityName_ As String
+Private includedConnectTableString_ As String
+Private queryFields_ As New Dictionary
+
+Private dbInfo_ As Collection
+
 
 Private Sub Class_Initialize()
     Set cn_ = New ADODB.Connection
@@ -121,7 +133,13 @@ Private Sub Class_Terminate()
     If cn_ Is Nothing Then Else If cn_.State > 0 Then cn_.Close
 End Sub
 
+' Properties -------------------------------------------------------------------------------
+Public Property Set DbInfo(v As Object)
+    Set dbInfo_ = v
+End Property
 
+
+' Methods ----------------------------------------------------------------------------------
 Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, _
                                  Optional schema_name As String = "dbo", _
                                  Optional dbcontext_name As String = "DbContext", _
@@ -174,6 +192,7 @@ End Function
 
 Public Function CreateDbInfoPropertyBy( _
     Optional property_name As String, _
+    Optional property_type As String, _
     Optional db_field_name As String, _
     Optional db_field_type As ADOX.DataTypeEnum = 0, _
     Optional auto_increment As Boolean = False, _
@@ -186,6 +205,7 @@ Public Function CreateDbInfoPropertyBy( _
     
     Set prop = New Collection
     Call prop.Add(property_name, DBINFO_PROPERTY_NAME)
+    Call prop.Add(property_type, DBINFO_PROPERTY_TYPE_NAME)
     Call prop.Add(db_field_name, DBINFO_FIELD_NAME)
     Call prop.Add(db_field_type, DBINFO_FIELD_TYPE)
     Call prop.Add(auto_increment, DBINFO_IS_AUTONUMBER)
@@ -199,363 +219,112 @@ Public Function CreateDbInfoPropertyBy( _
     Set CreateDbInfoPropertyBy = prop
 End Function
 
-
-Public Function SetQueryDbSet(db_info, entity_name) As String
+Public Function SetQueryDbSet(entity_name) As String
     baseEntityName_ = entity_name
+    Set queryFields_ = New Dictionary
+
+    includedConnectTableString_ = ""
+    includedConnectTableString_ = baseEntityName_
     
-    Dim includedEntityInfo As Collection, props As Collection
-    Set includedEntityInfo = New Collection
-    Set props = New Collection
-    Call includedEntityInfo.Add(entity_name, INCLUDE_ENTITY_NAME)
-    Call includedEntityInfo.Add(props, INCLUDE_PROPERTIES)
+    querySelect_ = "select "
+    queryField_ = ""
+    queryJoin_ = ""
+    queryWhere_ = ""
+    queryOrder_ = ""
     
-    Set includedEntityNames_ = includedEntityInfo
-    
-    fetchQuery_ = "select * from " & db_info(entity_name)(DBINFO_SQL_TABLE_NAME)
+    Call SetQueryField((dbInfo_(baseEntityName_)(DBINFO_SQL_TABLE_NAME)), dbInfo_(baseEntityName_)(DBINFO_PROPERTIES))
+    queryFrom_ = "from " & dbInfo_(baseEntityName_)(DBINFO_SQL_TABLE_NAME) & vbCrLf
 End Function
 
 Public Function SetQuerySelect(db_info, ParamArray property_names())
-    Dim p, field_name As String, joined_field_name As String
-    For Each p In property_names
-        field_name = db_info(baseEntityName_)(DBINFO_PROPERTIES)(p)(DBINFO_FIELD_NAME)
-        joined_field_name = p & ","
-    Next
-    joined_field_name = Left(joined_field_name, Len(joined_field_name) - 1)
-    lastSubQueryName_ = lastSubQueryName_ & "T"
-    fetchQuery_ = "select " & joined_field_name & " from (" & fetchQuery_ & ") " & lastSubQueryName_
 End Function
-Public Function SetQueryWhere(db_info, property_name As String, sql_operator As String, compare_value As String, Optional entity_name As String)
+
+Public Function SetQueryWhere(property_name As String, sql_operator As String, compare_value As String, Optional entity_name As String)
     entity_name = IIf(entity_name = "", baseEntityName_, entity_name)
-    lastSubQueryName_ = lastSubQueryName_ & "T"
-    fetchQuery_ = "select * from (" & fetchQuery_ & ") " & lastSubQueryName_ & " Where " & lastSubQueryName_ & "." & db_info(entity_name)(DBINFO_PROPERTIES)(property_name)(DBINFO_FIELD_NAME) & " " & sql_operator & " " & compare_value
-End Function
-
-Public Function SetQueryOrderBy(db_info, property_name As String, Optional entity_name As String, Optional is_asc As Boolean) As String
-    entity_name = IIf(entity_name = "", baseEntityName_, entity_name)
-    lastSubQueryName_ = lastSubQueryName_ & "T"
-    fetchQuery_ = "select * from (" & fetchQuery_ & ") " & lastSubQueryName_ & " order by " & lastSubQueryName_ & "." & db_info(entity_name)(DBINFO_PROPERTIES)(property_name)(DBINFO_FIELD_NAME) & IIf(is_asc, " asc", " desc")
-End Function
-Public Function SetQueryThenBy(db_info, property_name As String, Optional entity_name As String, Optional is_asc As Boolean) As String
-    entity_name = IIf(entity_name = "", baseEntityName_, entity_name)
-    fetchQuery_ = fetchQuery_ & "," & lastSubQueryName_ & "." & db_info(entity_name)(DBINFO_PROPERTIES)(property_name)(DBINFO_FIELD_NAME) & IIf(is_asc, " asc", " desc")
-End Function
-
-Public Function SetQueryInclude(db_info As Variant, property_name_invalid_parameter As String, property_name As String) As String
-    
-    Dim includedEntityInfo As Collection, props As Collection
-    Set includedEntityInfo = New Collection
-    Set props = New Collection
-    Call includedEntityInfo.Add(property_name, INCLUDE_ENTITY_NAME)
-    Call includedEntityInfo.Add(props, INCLUDE_PROPERTIES)
-    
-    Call includedEntityNames_(INCLUDE_PROPERTIES).Add(includedEntityInfo, property_name)
-    Set lastIncludedEntityProps_ = props
-
-End Function
-Public Function SetQueryThenInclude(property_name As String) As String
-    
-    Dim includedEntityInfo As Collection, props As Collection
-    Set includedEntityInfo = New Collection
-    Set props = New Collection
-    Call includedEntityInfo.Add(property_name, INCLUDE_ENTITY_NAME)
-    Call includedEntityInfo.Add(props, INCLUDE_PROPERTIES)
-    
-    Call lastIncludedEntityProps_.Add(includedEntityInfo, property_name)
-    Set lastIncludedEntityProps_ = props
-
-End Function
-
-
-Private Function GetEntFromEnts(tbl As Collection, rels As Collection, db_info As Collection)
-    Dim prop As Collection, prop_name As String, ents As New Collection, ent, v As Variant, rel
-    
-    Set ents = New Collection
-    For Each ent In tbl
-        Dim f As Boolean: f = True
-        For Each rel In rels
-            prop_name = rel(DBINFO_PROPERTY_NAME)
-            v = rel("Value")
-            If CallByName(ent, prop_name, VbGet) = v Then Else f = False
-        Next
-        If f Then Call ents.Add(ent)
-    Next
-    
-    Set GetEntFromEnts = ents
-End Function
-
-
-Public Function FetchRecords(entity_name As String, DbInfo As Object, dbc As Object, cnt As Long, Optional qry1 As String, Optional qryW As String, Optional include_props As Collection)
-    Dim rs As Recordset, qry As String, recs As New Collection, rec As Object, props As Collection, prop As Collection, p As Variant
-    
-    '1. fetch BaseEntity
-    Dim joined_field_name
-    joined_field_name = GetFieldNamesStringFromDbInfoBy(DbInfo, entity_name)
-    
-    If qry1 = "" Then
-        qry = fetchQuery_
-        Set include_props = includedEntityNames_(INCLUDE_PROPERTIES)
+    If queryWhere_ = "" Then
+        queryWhere_ = " where " & GetDbInfoSqlFieldNameBy(entity_name, property_name) & " " & sql_operator & " " & compare_value
     Else
-        qry = "select " & joined_field_name & " from " & DbInfo(baseEntityName_)(DBINFO_SQL_TABLE_NAME) & qry1 & " " & qryW
+        queryWhere_ = queryWhere_ & " and " & GetDbInfoSqlFieldNameBy(entity_name, property_name) & " " & sql_operator & " " & compare_value
     End If
+End Function
+
+Public Function SetQueryOrderBy(property_name As String, Optional entity_name As String, Optional is_asc As Boolean) As String
+    entity_name = IIf(entity_name = "", baseEntityName_, entity_name)
+    queryOrder_ = " order by " & (GetDbInfoSqlFieldNameBy(entity_name, property_name)) & IIf(is_asc, " asc", " desc")
+End Function
+
+Public Function SetQueryThenBy(property_name As String, Optional entity_name As String, Optional is_asc As Boolean) As String
+    entity_name = IIf(entity_name = "", baseEntityName_, entity_name)
+    queryOrder_ = queryOrder_ & " , " & (GetDbInfoSqlFieldNameBy(entity_name, property_name)) & IIf(is_asc, " asc", " desc")
+End Function
+
+Public Function SetQueryInclude(property_name As String) As String
+    Dim base_table As String, base_field As String, related_table As String, related_field As String, base_prop_name As String, related_prop_name As String, related_entity_name As String
+    Dim prop As Collection, full_name As String
+        
+    base_prop_name = dbInfo_(baseEntityName_)(DBINFO_PROPERTIES)(property_name)(DBINFO_BASE_PROPERTY_NAME)
+    related_prop_name = dbInfo_(baseEntityName_)(DBINFO_PROPERTIES)(property_name)(DBINFO_RELATED_PROPERTY_NAME)
+    related_entity_name = dbInfo_(baseEntityName_)(DBINFO_PROPERTIES)(property_name)(DBINFO_PROPERTY_TYPE_NAME)
+    base_table = dbInfo_(baseEntityName_)(DBINFO_SQL_TABLE_NAME)
+    base_field = dbInfo_(baseEntityName_)(DBINFO_PROPERTIES)(base_prop_name)(DBINFO_FIELD_NAME)
+    related_table = dbInfo_(related_entity_name)(DBINFO_SQL_TABLE_NAME)
+    related_field = dbInfo_(related_entity_name)(DBINFO_PROPERTIES)(related_prop_name)(DBINFO_FIELD_NAME)
+    
+    queryJoin_ = queryJoin_ & _
+        " left outer join " & related_table & " on " & base_table & ".[" & base_field & "] = " & related_table & ".[" & related_field & "]" & vbCrLf
+    
+    includedConnectTableString_ = baseEntityName_
+    includedConnectTableString_ = includedConnectTableString_ & property_name
+    Call SetQueryField(related_table, dbInfo_(related_entity_name)(DBINFO_PROPERTIES))
+       
+    lastIncludedEntityName_ = related_entity_name
+    
+End Function
+
+Public Function SetQueryThenInclude(property_name As String) As String
+    Dim base_table As String, base_field As String, related_table As String, related_field As String, base_prop_name As String, related_prop_name As String, related_entity_name As String
+    Dim prop As Collection, full_name As String
+    
+    base_prop_name = dbInfo_(lastIncludedEntityName_)(DBINFO_PROPERTIES)(property_name)(DBINFO_BASE_PROPERTY_NAME)
+    related_prop_name = dbInfo_(lastIncludedEntityName_)(DBINFO_PROPERTIES)(property_name)(DBINFO_RELATED_PROPERTY_NAME)
+    related_entity_name = dbInfo_(lastIncludedEntityName_)(DBINFO_PROPERTIES)(property_name)(DBINFO_PROPERTY_TYPE_NAME)
+    base_table = dbInfo_(lastIncludedEntityName_)(DBINFO_SQL_TABLE_NAME)
+    base_field = dbInfo_(lastIncludedEntityName_)(DBINFO_PROPERTIES)(base_prop_name)(DBINFO_FIELD_NAME)
+    related_table = dbInfo_(related_entity_name)(DBINFO_SQL_TABLE_NAME)
+    related_field = dbInfo_(related_entity_name)(DBINFO_PROPERTIES)(related_prop_name)(DBINFO_FIELD_NAME)
+    
+    queryJoin_ = queryJoin_ & _
+        " left outer join " & related_table & " on " & base_table & ".[" & base_field & "] = " & related_table & ".[" & related_field & "]" & vbCrLf
+    
+    includedConnectTableString_ = includedConnectTableString_ & property_name
+
+    Call SetQueryField(related_table, dbInfo_(related_entity_name)(DBINFO_PROPERTIES))
+      
+    lastIncludedEntityName_ = related_entity_name
+End Function
+
+Public Function FetchRecords(entity_name As String, dbc As Object)
+    Dim rs As Recordset, qry As String, re As Collection, records_rows As Collection
+    
+    qry = querySelect_ & vbCrLf & queryField_ & vbCrLf & queryFrom_ & vbCrLf & queryJoin_ & vbCrLf & queryWhere_ & vbCrLf & queryOrder_
+    
+    Call OpenDb
     Set rs = FetchRecordSetByQuery(qry)
     If rs.BOF And rs.EOF Then GoTo errFetchQuery
-    
-    rs.MoveFirst
-    Do Until rs.EOF
-        Set rec = dbc.CreateObjectBy(entity_name)
-        Set props = DbInfo(entity_name)(DBINFO_PROPERTIES)
-        For Each prop In props
-            If prop(DBINFO_FIELD_NAME) <> "" Then
-                Call CallByName(rec, prop(DBINFO_PROPERTY_NAME), VbLet, rs.Fields(prop(DBINFO_FIELD_NAME)).Value)
-            End If
-        Next
-        Call recs.Add(rec)
-        rs.MoveNext
-    Loop
-    
-    '2. fetch included entity
-    If include_props.Count = 0 Then Set FetchRecords = recs: Exit Function
-    
-    Dim includedEntityName As Collection, ent_name As String
-    For Each rec In recs
         
-        For Each includedEntityName In include_props
-            Dim prop_name As String
-            prop_name = includedEntityName(INCLUDE_ENTITY_NAME)
-            ent_name = IIf(GetEntityNameFromDbInfoBy(DbInfo, prop_name) = "", prop_name, GetEntityNameFromDbInfoBy(DbInfo, prop_name))
-            
-            Dim bprop, bfld, rprop, rfld
-            bprop = DbInfo(entity_name)(DBINFO_PROPERTIES)(prop_name)(DBINFO_BASE_PROPERTY_NAME)
-            bfld = DbInfo(entity_name)(DBINFO_PROPERTIES)(bprop)(DBINFO_FIELD_NAME)
-            rprop = DbInfo(entity_name)(DBINFO_PROPERTIES)(prop_name)(DBINFO_RELATED_PROPERTY_NAME)
-            rfld = DbInfo(ent_name)(DBINFO_PROPERTIES)(rprop)(DBINFO_FIELD_NAME)
-            
-            Dim sql_left, sql_right
-            sql_left = DbInfo(entity_name)(DBINFO_SQL_TABLE_NAME) & ".[" & bfld & "]"
-            sql_right = DbInfo(ent_name)(DBINFO_SQL_TABLE_NAME) & ".[" & rfld & "]"
-            
-            
-            'qry = "select " & "..."  ' more upper place
-            'qry = qry & "from " & DbInfo(baseEntityName_)(DBINFO_SQL_TABLE_NAME)
-            qry1 = qry1 & " join " & DbInfo(ent_name)(DBINFO_SQL_TABLE_NAME) & " on " & sql_left & " = " & sql_right
-            qryW = IIf(qryW = "", GetQueryPrimaryWhere(rec, DbInfo), qryW & " and " & Replace(GetQueryPrimaryWhere(rec, DbInfo), "Where", ""))
-            
-            
-            Dim r As Object
-            Set r = FetchRecords(ent_name, DbInfo, dbc, cnt + 1, qry1, qryW, includedEntityName(INCLUDE_PROPERTIES))
-            
-            If r.Count = 0 Then
-                Call CallByName(rec, prop_name, VbSet, r(1))
-            Else
-                Call CallByName(CallByName(rec, prop_name, VbGet), "Items", VbSet, r)
-            End If
-            qry1 = ""
-            qryW = ""
-        Next
+    Set records_rows = ConvertRecordRowsToCollection(rs.GetRows)
+    Set re = FetchRecsSubRecursive(records_rows, entity_name, entity_name, dbc, cnt:=0)
     
-    Next
-    
-    
-    
-    
-    
-    
-    Set FetchRecords = recs
+    ' todo take, skip, first
+    Set FetchRecords = re
     Exit Function
-    
-    
-    
-    
-    
-    
-    
+        
 errFetchQuery:
     Set FetchRecords = Nothing:     Exit Function
     
-    
-    
-    
-    
-    
-    
-    
-    ' -----
-'    Dim n, entss As New Collection
-'    For Each n In includedEntityNames_
-'        Call entss.Add(FetchRecordsSub((n), DbInfo, dbc, 0), n)
-'    Next
-'
-'    Dim ents, ent
-'    Dim prop, property_name As String, p, ent_name, is_entities As Boolean
-'    Set ents = entss(entity_name)
-'    For Each ent In ents
-'        For Each prop In DbInfo(entity_name)(DBINFO_PROPERTIES)
-'            property_name = prop(DBINFO_PROPERTY_NAME)
-'            If prop(DBINFO_FIELD_NAME) = "" Then
-'                Set p = CallByName(ent, prop(DBINFO_PROPERTY_NAME), VbGet)
-'                ent_name = GetEntityNameFromDbInfoBy(DbInfo, TypeName(p))
-'
-'                is_entities = False
-'                If ent_name <> "" Then is_entities = True Else ent_name = TypeName(p)
-'                If CollectionContain(includedEntityNames_, ent_name) Then
-'
-'                    Dim rels As Collection, rel As Collection
-'                    Set rel = New Collection
-'                    Call rel.Add(prop(DBINFO_RELATED_PROPERTY_NAME), DBINFO_PROPERTY_NAME)
-'                    Call rel.Add(CallByName(ent, prop(DBINFO_RELATED_PROPERTY_NAME), VbGet), "Value")
-'                    Set rels = New Collection
-'                    Call rels.Add(rel)
-'
-'                    Dim tbls As Collection
-'                    Set tbls = GetEntFromEnts(entss(ent_name), rels, DbInfo)
-'                    If is_entities Then
-'                        If (tbls.Count > 0) Then Call CallByName(CallByName(ent, property_name, VbGet), "Items", VbSet, tbls)
-'                    Else
-'                        If (tbls.Count > 0) Then Call CallByName(ent, property_name, VbSet, tbls.Item(1))
-'                    End If
-'                End If
-'            End If
-'        Next
-'    Next
-'    Set FetchRecords = ents
-    
-    
-           
-    ' -----
- 
-    
-    
-'
-'    Dim rs As Recordset, Items As New Collection, T As Object, props As Collection, prop As Collection, p As Variant
-'    Dim fkey, kyfld, kyfldv, foreign_table_name As String, ent_name As String, entities_name As String, property_name As String, qry1, tbls As Collection, rels As Collection, rel As Collection
-'    Dim sqn, wtxt, IsEntities As Boolean
-'
-'
-'    If cnt > LOOP_MAX Then GoTo errFetchQuery
-'
-'    Set props = DbInfo(entity_name)(DBINFO_PROPERTIES)
-'
-'    ' todo---
-''    joined_field_name = GetFieldNamesStringFromDbInfoBy(DbInfo, entity_name)
-'    If qry = "" Then qry = "select " & GetFieldNamesStringFromDbInfoBy(DbInfo, entity_name) & " from (" & fetchQuery_ & ") " & lastSubQueryName_ & "T"
-'    'If qry = "" Then qry = fetchQuery_ ' todo
-'    ' ---
-'
-'    On Error GoTo errFetchQuery
-'    Set rs = FetchRecordSetByQuery(qry)
-'    If rs.BOF And rs.EOF Then GoTo errFetchQuery
-'    On Error GoTo 0
-'
-'    rs.MoveFirst
-'    Do Until rs.EOF
-'        Set T = dbc.CreateObjectBy(entity_name)
-'        For Each prop In props
-'            property_name = prop(DBINFO_PROPERTY_NAME)
-'            If prop(DBINFO_FIELD_NAME) = "" Then
-'                Set p = CallByName(T, prop(DBINFO_PROPERTY_NAME), VbGet)
-'                ent_name = GetEntityNameFromDbInfoBy(DbInfo, TypeName(p))
-'                IsEntities = False
-'                If ent_name <> "" Then IsEntities = True Else ent_name = TypeName(p)
-'
-'                sqn = lastSubQueryName_ & "T": wtxt = ""
-'                For Each rel In GetRelations((DbInfo(entity_name)(DBINFO_TABLE_NAME)), (DbInfo(ent_name)(DBINFO_TABLE_NAME)))
-'                    kyfldv = rs.Fields(rel(KEY_DB_BASE_KEY_FIELD_NAME)).Value  ' todo convert type
-'                    wtxt = wtxt & DbInfo(ent_name)(DBINFO_TABLE_NAME) & "." & rel(KEY_DB_RELATED_FIELD_NAME) & " = " & kyfldv & " And "
-'                Next
-'                wtxt = TrimLast(wtxt, " And ")
-''                qry1 = "SELECT * FROM (" & fetchQuery_ & ") " & sqn & " WHERE " & wtxt
-'                qry1 = "select * from " & DbInfo(ent_name)(DBINFO_TABLE_NAME) & " " & DbInfo(ent_name)(DBINFO_TABLE_NAME) & " WHERE " & wtxt
-'
-'                If IsEntities Then
-'                    Set tbls = FetchRecords(ent_name, DbInfo, dbc, cnt + 1, (qry1))
-'                    If (tbls Is Nothing) = False Then Call CallByName(CallByName(T, property_name, VbGet), "Items", VbSet, tbls)
-'
-'                Else
-''                    Set rel = GetRelations((DbInfo(entity_name)(DBINFO_TABLE_NAME)), (DbInfo(TypeName(p))(DBINFO_TABLE_NAME)))
-''                    kyfldv = rs.Fields(rel(1)(KEY_DB_BASE_KEY_FIELD_NAME)).Value
-''                    qry1 = "SELECT * FROM (" & fetchQuery_ & ") " & lastSubQueryName_ & "T" & " WHERE " & lastSubQueryName_ & "T." & rel(1)(KEY_DB_BASE_KEY_FIELD_NAME) & " = " & kyfldv ' todo convert type
-'
-'                    Set tbls = FetchRecords(TypeName(p), DbInfo, dbc, cnt + 1, (qry1))
-'                    If (tbls Is Nothing) = False Then Call CallByName(T, property_name, VbSet, tbls.Item(1))
-'                End If
-'            Else
-'                Call CallByName(T, property_name, VbLet, rs.Fields(prop(DBINFO_FIELD_NAME)).Value)
-'            End If
-'        Next
-'        Items.Add T
-'        rs.MoveNext
-'    Loop
-'    rs.Close
-'
-'    Set FetchRecords = Items
-'    Exit Function
-'
-'errFetchQuery:
-'    Set FetchRecords = Nothing:     Exit Function
 End Function
 
-Private Function FetchRecordsSub(entity_name As String, DbInfo As Object, dbc As Object, cnt As Long, Optional qry As String)
-    Dim rs As Recordset, Items As New Collection, T As Object, props As Collection, prop As Collection, p As Variant
-    Dim fkey, kyfld, kyfldv, foreign_table_name As String, ent_name As String, entities_name As String, property_name As String, qry1, tbls As Collection, rels As Collection, rel As Collection
-           
-    
-    On Error GoTo errFetchQuery
-    qry = "select * from " & DbInfo(entity_name)(DBINFO_SQL_TABLE_NAME)
-    Set rs = FetchRecordSetByQuery(qry)
-    If rs.BOF And rs.EOF Then GoTo errFetchQuery
-    On Error GoTo 0
-    
-    Set props = DbInfo(entity_name)(DBINFO_PROPERTIES)
-    rs.MoveFirst
-    Do Until rs.EOF
-        Set T = dbc.CreateObjectBy(entity_name)
-        For Each prop In props
-            property_name = prop(DBINFO_PROPERTY_NAME)
-            If prop(DBINFO_FIELD_NAME) = "" Then
-            Else
-                Call CallByName(T, property_name, VbLet, rs.Fields(prop(DBINFO_FIELD_NAME)).Value)
-            End If
-        Next
-        Items.Add T
-        rs.MoveNext
-    Loop
-    rs.Close
-    
-    Set FetchRecordsSub = Items
-    Exit Function
-    
-errFetchQuery:
-    Set FetchRecordsSub = Nothing:     Exit Function
-End Function
-
-
-
-'Private Function DoesPrimaryKeyHaveValue(rec As Object, dbInfos As Object) As Boolean
-'    Dim tbl As ADOX.Table, ky As ADOX.Key, col As ADOX.Column, DbInfo As Collection
-'    DoesPrimaryKeyHaveValue = True
-'    Set DbInfo = dbInfos(TypeName(rec))
-'    Set tbl = catalog_.Tables(DbInfo(KEY_DB_TABLE_NAME))
-'    For Each ky In tbl.Keys
-'        If ky.Type = adKeyPrimary Then
-'            For Each col In ky.Columns
-'                If IsNullOrEmptyOrZeroOrWhiteSpace(CallByName(rec, GetPropertyNameByDbTableFieldName(dbInfos, tbl.Name, col.Name), VbGet)) Then
-'                    DoesPrimaryKeyHaveValue = False
-'                End If
-'            Next
-'        End If
-'    Next
-'End Function
-
-Private Function IsNullOrEmptyOrZeroOrWhiteSpace(v As Variant) As Boolean
-    IsNullOrEmptyOrZeroOrWhiteSpace = True
-    If IsNull(v) Then Exit Function
-    If IsEmpty(v) Then Exit Function
-    If vbInteger <= VarType(v) And VarType(v) <= vbCurrency Then If (v) = 0 Then Exit Function
-    If VarType(v) = vbString Then If (v) = "" Then Exit Function
-    IsNullOrEmptyOrZeroOrWhiteSpace = False
-End Function
-
-Public Function Add(rec As Object, DbInfo As Object)
+Public Function Add(rec As Object)
     Dim rs As New ADODB.Recordset, prop As Collection
     Dim ent_name, is_related_field_index As Boolean, r As Object, v As Variant
                                             
@@ -563,18 +332,18 @@ On Error GoTo errOpen
     OpenDb
     cn_.CursorLocation = adUseClient
     
-    Call AddRelatedEntity(rec, DbInfo)
+    Call AddRelatedEntity(rec, dbInfo_)
                 
-    If HasPrimaryKey(rec, DbInfo) = False Then If ExistUniqueRecord(rec, DbInfo) Then Call Err.Raise(10003, "EntityContexter.Add()", "Record is already exist")
+    If HasPrimaryKey(rec, dbInfo_) = False Then If ExistUniqueRecord(rec, dbInfo_) Then Call Err.Raise(10003, "EntityContexter.Add()", "Record is already exist")
     Call cn_.BeginTrans
 On Error GoTo errTrans
-    Call rs.Open(Source:=DbInfo(TypeName(rec))(KEY_SQL_TABLE_NAME), ActiveConnection:=cn_, LockType:=adLockOptimistic)
-    Call rs.AddNew(GetFieldsListByEntity(rec, DbInfo), GetValuesListByEntity(rec, DbInfo))
-    Call SetAutoincrementFieldsValues(rs, rec, DbInfo)
+    Call rs.Open(Source:=dbInfo_(TypeName(rec))(KEY_SQL_TABLE_NAME), ActiveConnection:=cn_, LockType:=adLockOptimistic)
+    Call rs.AddNew(GetFieldsListByEntity(rec, dbInfo_), GetValuesListByEntity(rec, dbInfo_))
+    Call SetAutoincrementFieldsValues(rs, rec, dbInfo_)
     Call cn_.CommitTrans
     
 On Error GoTo errOpen
-    Call AddRelatedEntities(rec, DbInfo)
+    Call AddRelatedEntities(rec, dbInfo_)
 
     Exit Function
 
@@ -595,7 +364,7 @@ Private Function AddRelatedEntity(rec As Object, DbInfo As Object)
         Set r = CallByName(rec, prop(DBINFO_PROPERTY_NAME), VbGet)
         Dim pky_value: pky_value = CallByName(r, prop(DBINFO_RELATED_PROPERTY_NAME), VbGet)
         If IsNullOrEmptyOrZeroOrWhiteSpace(pky_value) Then
-            Call Add(r, DbInfo)
+            Call Add(r)
             v = CallByName(r, prop(DBINFO_RELATED_PROPERTY_NAME), VbGet)
             Call CallByName(rec, prop(DBINFO_BASE_PROPERTY_NAME), VbLet, (v))
         End If
@@ -611,7 +380,7 @@ Private Function AddRelatedEntities(rec As Object, DbInfo As Object)
         For Each r In CallByName(rec, prop(DBINFO_PROPERTY_NAME), VbGet)
             v = CallByName(rec, prop(DBINFO_BASE_PROPERTY_NAME), VbGet)
             Call CallByName(r, prop(DBINFO_RELATED_PROPERTY_NAME), VbLet, (v))
-            Call Add(r, DbInfo)
+            Call Add(r)
         Next
     Next
     
@@ -663,19 +432,18 @@ Private Function GetFieldsListByEntity(rec As Object, DbInfo As Object)
 
 End Function
 
-'todo change Update()
-Public Function Update(rec As Object, DbInfo As Object)
+Public Function Update(rec As Object)
     
 On Error GoTo errOpen
     Call OpenDb
     cn_.CursorLocation = adUseClient
     
-    If HasPrimaryKey(rec, DbInfo) = False Then Call Err.Raise(10001, "EntityContexter.Update()", "Table has no primary key")
-    If ExistUniqueRecord(rec, DbInfo) = False Then Call Err.Raise(10002, "EntityContexter.Update()", "Not found records")
+    If HasPrimaryKey(rec, dbInfo_) = False Then Call Err.Raise(10001, "EntityContexter.Update()", "Table has no primary key")
+    If ExistUniqueRecord(rec, dbInfo_) = False Then Call Err.Raise(10002, "EntityContexter.Update()", "Not found records")
     
     Call cn_.BeginTrans
 On Error GoTo errTrans
-    Call cn_.Execute(CommandText:=CreateUpdateQuery(rec, DbInfo))
+    Call cn_.Execute(CommandText:=CreateUpdateQuery(rec, dbInfo_))
     Call cn_.CommitTrans
     Exit Function
 
@@ -685,18 +453,17 @@ errOpen:
     Err.Raise Err.Number, Err.Source & vbCrLf & "EntityContexter.Update()", Err.Description
 End Function
 
-'todo change Remove()
-Public Function Remove(rec As Object, DbInfo As Object)
+Public Function Remove(rec As Object)
     
 On Error GoTo errOpen
     If cn_.State <> adStateOpen Then cn_.Open
     cn_.CursorLocation = adUseClient
-    If HasPrimaryKey(rec, DbInfo) = False Then Call Err.Raise(10001, "EntityContexter.Remove()", "Table has no primary key")
-    If ExistUniqueRecord(rec, DbInfo) = False Then Call Err.Raise(10002, "EntityContexter.Remove()", "Not found records")
+    If HasPrimaryKey(rec, dbInfo_) = False Then Call Err.Raise(10001, "EntityContexter.Remove()", "Table has no primary key")
+    If ExistUniqueRecord(rec, dbInfo_) = False Then Call Err.Raise(10002, "EntityContexter.Remove()", "Not found records")
     
     Call cn_.BeginTrans
 On Error GoTo errTrans
-    Call cn_.Execute(CommandText:=CreateDeleteQuery(rec, DbInfo))
+    Call cn_.Execute(CommandText:=CreateDeleteQuery(rec, dbInfo_))
     Call cn_.CommitTrans
     Exit Function
 
@@ -1425,53 +1192,53 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add ""
         .Add ""
         .Add "Public Function DbSet(entity_name As String) As " & dbc_name
-        .Add "        Call ec_.SetQueryDbSet(DbInfo, entity_name):    entity_name_ = entity_name:     Set DbSet = Me"
+        .Add "        Call ec_.SetQueryDbSet(entity_name):    entity_name_ = entity_name:     Set DbSet = Me"
         .Add "End Function"
         .Add ""
         .Add "Public Function Where(property_name As String, sql_operator As String, compare_value As String, Optional entity_name As String) As " & dbc_name
-        .Add "        Call ec_.SetQueryWhere(DbInfo, property_name, sql_operator, compare_value, entity_name):      Set Where = Me"
+        .Add "        Call ec_.SetQueryWhere(property_name, sql_operator, compare_value, entity_name):      Set Where = Me"
         .Add "End Function"
         .Add ""
         .Add "Public Function Include(entity_name As String) As " & dbc_name
-        .Add "    Call ec_.SetQueryInclude(DbInfo, entity_name_, entity_name):     Set Include = Me"
+        .Add "    Call ec_.SetQueryInclude(entity_name_, entity_name):     Set Include = Me"
         .Add "End Function"
         .Add ""
         .Add "Public Function OrderBy(property_name As String, Optional entity_name As String) As " & dbc_name
-        .Add "    Call ec_.SetQueryOrderBy(DbInfo, property_name, entity_name, true):   Set OrderBy = Me"
+        .Add "    Call ec_.SetQueryOrderBy(property_name, entity_name, true):   Set OrderBy = Me"
         .Add "End Function"
         .Add ""
         .Add "Public Function OrderByDescending(property_name As String, Optional entity_name As String) As " & dbc_name
-        .Add "    Call ec_.SetQueryOrderBy(DbInfo, property_name, entity_name, false):   Set OrderByDescending = Me"
+        .Add "    Call ec_.SetQueryOrderBy(property_name, entity_name, false):   Set OrderByDescending = Me"
         .Add "End Function"
         .Add ""
         .Add "Public Function ThenBy(property_name As String, Optional entity_name As String) As " & dbc_name
-        .Add "    Call ec_.SetQueryThenBy(DbInfo, property_name, entity_name, false):   Set ThenBy = Me"
+        .Add "    Call ec_.SetQueryThenBy(property_name, entity_name, false):   Set ThenBy = Me"
         .Add "End Function"
         .Add ""
         .Add "Public Function ThenByDescending(property_name As String, Optional entity_name As String) As " & dbc_name
-        .Add "    Call ec_.SetQueryThenBy(DbInfo, property_name, entity_name, false):   Set ThenByDescending = Me"
+        .Add "    Call ec_.SetQueryThenBy(property_name, entity_name, false):   Set ThenByDescending = Me"
         .Add "End Function"
         .Add ""
         .Add "Public Function ToList() As Variant"
-        .Add "    Set ToList = ec_.FetchRecords(entity_name_, DbInfo, Me, 0)"
+        .Add "    Set ToList = ec_.FetchRecords(entity_name_, Me)"
         .Add "End Function"
         .Add ""
         .Add ""
         .Add "Public Function Add(rec As Object)"
         .Add ""
-        .Add "    Call ec_.Add(rec, DBInfo)"
+        .Add "    Call ec_.Add(rec)"
         .Add ""
         .Add "End Function"
         .Add ""
         .Add "Public Function Update(rec As Object)"
         .Add ""
-        .Add "    Call ec_.Update(rec, DBInfo)"
+        .Add "    Call ec_.Update(rec)"
         .Add ""
         .Add "End Function"
         .Add ""
         .Add "Public Function Remove(rec As Object)"
         .Add ""
-        .Add "    Call ec_.Remove(rec, DBInfo)"
+        .Add "    Call ec_.Remove(rec)"
         .Add ""
         .Add "End Function"
         .Add ""
@@ -1493,15 +1260,10 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
                 tmp = "    Set prop = ec_.CreateDbInfoPropertyBy("
                 tmp = tmp & "   property_name:=""" & prop(ENTIINFO_PROPERTY_NAME) & """"
                 tmp = tmp & IIf(prop(ENTIINFO_DB_FIELD_NAME) <> "", ",  db_field_name:=""" & prop(ENTIINFO_DB_FIELD_NAME) & """", "")
-'                tmp = tmp & ", entity_property_type:=""" & prop(KEY_ENTITY_PROPERTY_TYPE) & """"
                 tmp = tmp & IIf(prop(ENTIINFO_DB_IS_AUTOINCREMENT), ", auto_increment:=" & prop(ENTIINFO_DB_IS_AUTOINCREMENT), "")
                 tmp = tmp & IIf(prop(ENTIINFO_DB_IS_PRIMARY_KEY), ", primary_key:=" & prop(ENTIINFO_DB_IS_PRIMARY_KEY), "")
                 tmp = tmp & IIf(prop(ENTIINFO_DB_IS_UNIQUE_KEY), ", unique_key:=" & prop(ENTIINFO_DB_IS_UNIQUE_KEY), "")
-'                tmp = tmp & ", foreign_key:=""" & prop(KEY_ENTITY_FOREIGNKEY) & """"
-'                tmp = tmp & ", foreign_table:=""" & prop(KEY_ENTITY_FOREIGN_TABLE) & """"
-'                tmp = tmp & ", inverse_foreign_key:=""" & prop(KEY_ENTITY_INVERSE_FOREIGNKEY) & """"
-'                tmp = tmp & ", inverse_foreign_table:=""" & prop(KEY_ENTITY_INVERSE_FOREIGN_TABLE) & """"
-'                tmp = tmp & ", primary_key   :=""" & info(ENTIINFO_DB_IS_INDEX) & """"
+                ' todo add relatetion
                 tmp = tmp & ")"
                 .Add tmp
                 .Add "    Call props.Add(prop, """ & prop(ENTIINFO_PROPERTY_NAME) & """)"
@@ -1519,6 +1281,7 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add "    Select Case class_name"
         For Each info In infos
             .Add "        Case """ & info(ENTIINFO_ENTITY_NAME) & """: Set CreateObjectBy = New " & info(ENTIINFO_ENTITY_NAME)
+            .Add "        Case """ & info(ENTIINFO_ENTITIES_NAME) & """: Set CreateObjectBy = New " & info(ENTIINFO_ENTITIES_NAME)
         Next
         .Add "    End Select"
         .Add "End Function"
@@ -1885,6 +1648,134 @@ Private Function FetchRecordSetByQuery(query_string As String) As ADODB.Recordse
 End Function
 
 
+' CreateQuery() funcitons --------------------------------------------------------------------------------------------------------------------------
+Private Function SetQueryField(table_name As String, props As Variant)
+    Dim prop As Collection, full_name As String
+            
+    If queryField_ <> "" Then queryField_ = queryField_ & ", "
+    For Each prop In props
+        If prop(DBINFO_FIELD_NAME) <> "" Then
+            full_name = includedConnectTableString_ & prop(DBINFO_PROPERTY_NAME)
+            queryField_ = queryField_ & vbCrLf & table_name & ".[" & prop(DBINFO_FIELD_NAME) & "]" & " as " & ConvertDbInfoFullNameToColumnName(full_name) & ", "
+            If queryFields_.Exists(full_name) = False Then Call queryFields_.Add(full_name, queryFields_.Count + 1)
+        End If
+    Next
+    
+    queryField_ = Left(queryField_, Len(queryField_) - Len(", "))
+End Function
+
+Private Function ConvertDbInfoFullNameToColumnName(full_field_name As String) As String
+    ConvertDbInfoFullNameToColumnName = Replace(Replace(Replace(full_field_name, ".", ""), "[", ""), "]", "")
+End Function
+
+
+' FetchRecords() functions ------------------------------------------------------------------------------------------------------------------------
+Private Function FetchRecsSubRecursive(records_row As Collection, ByVal entity_name As String, ByVal prop_path As String, dbc, Optional cnt As Long) As Object
+    Dim recs As New Collection, grouped_recs As Collection, record_rows As Collection, record_row, rec As Object, field_name As String, prop_name, v As Variant
+    Dim prop As Collection, re As Collection, entities_object As Object
+    
+    If ExistPropertyPath(entity_name, prop_path) = False Then Set FetchRecsSubRecursive = New Collection: Exit Function
+    
+    Set grouped_recs = GroupRecordsCollectionByEntityName(records_row, entity_name, prop_path)
+    For Each record_rows In grouped_recs
+        If record_rows.Count > 0 Then record_row = record_rows(1)
+        If IsRecordAllNullValue(record_row, entity_name, prop_path) = False Then
+            ' to create object
+            Set rec = dbc.CreateObjectBy(entity_name)
+            Call recs.Add(rec)
+            
+            ' set values
+            For Each prop_name In GetPropertyNamesFromDbInfoBy(entity_name)
+                field_name = prop_path & prop_name
+                If queryFields_.Exists(field_name) Then
+                    v = record_row(queryFields_.Item(field_name))
+                    Call CallByName(rec, prop_name, VbLet, (v))
+                End If
+            Next
+                
+            ' to recul related object
+            For Each prop In GetRelatedPropFromDbInfoBy(entity_name)
+                prop_name = prop(DBINFO_PROPERTY_NAME)
+                Set re = FetchRecsSubRecursive(record_rows, prop(DBINFO_PROPERTY_TYPE_NAME), prop_path & prop_name, dbc)
+                
+                If re.Count = 0 Then
+                    Call CallByName(rec, prop_name, VbSet, Nothing)
+                Else
+                    If IsRelatedPropertyUniqueKey(prop) Then
+                        Call CallByName(rec, prop_name, VbSet, re(1))
+                    Else
+                        Set entities_object = dbc.CreateObjectBy((dbInfo_(prop(DBINFO_PROPERTY_TYPE_NAME))(DBINFO_ENTITIES_NAME)))
+                        Set entities_object.Items = re
+                        Call CallByName(rec, prop_name, VbSet, entities_object)
+                    End If
+                End If
+            Next
+        End If
+    Next
+        
+    Set FetchRecsSubRecursive = recs
+End Function
+
+Private Function GroupRecordsCollectionByEntityName(records_collection As Collection, entity_name As String, prop_path As String) As Collection
+    Dim r As Variant, i As Long, records_with_index As Dictionary, re As New Collection, same_entity_records As New Collection
+    
+    Set records_with_index = ConvertCollectionToDictionaryWithIndexKey(records_collection)
+    
+    For i = 1 To records_with_index.Count
+        r = records_with_index.Item(CStr(i))
+        If HasSameRecord(r, same_entity_records, entity_name, prop_path) Then
+            Call same_entity_records.Add((r))
+            Call records_with_index.Remove(CStr(i))
+        Else
+            Set same_entity_records = New Collection
+            Call re.Add(same_entity_records)
+            Call same_entity_records.Add(r)
+            Call records_with_index.Remove(CStr(i))
+        End If
+    Next
+    
+    Set GroupRecordsCollectionByEntityName = re
+End Function
+
+Private Function HasSameRecord(r, col As Collection, entity_name As String, prop_path) As Boolean
+    Dim prop_name, field_name As String, c As Long, r1, f As Boolean
+    
+    For Each r1 In col
+        f = True
+        For Each prop_name In GetPropertyNamesFromDbInfoBy(entity_name)
+            field_name = prop_path & prop_name
+            c = queryFields_(field_name)
+            If r(c) <> r1(c) Then f = False
+        Next
+        If f Then HasSameRecord = True: Exit Function
+    Next
+
+End Function
+
+Private Function ExistPropertyPath(entity_name As String, prop_path As String) As Boolean
+    Dim prop_name, prop As Collection
+    
+    For Each prop In dbInfo_(entity_name)(DBINFO_PROPERTIES)
+        prop_name = prop_path & prop(DBINFO_PROPERTY_NAME)
+        If queryFields_.Exists(prop_name) Then ExistPropertyPath = True: Exit Function
+    Next
+
+End Function
+
+Private Function IsRecordAllNullValue(record_array, entity_name As String, prop_path As String) As Boolean
+    Dim prop_name, field_name
+    
+    IsRecordAllNullValue = True
+    For Each prop_name In GetPropertyNamesFromDbInfoBy(entity_name)
+        field_name = prop_path & prop_name
+        If queryFields_.Exists(field_name) Then If IsNull(record_array(queryFields_.Item(field_name))) = False Then IsRecordAllNullValue = False: Exit Function
+    Next
+
+End Function
+
+
+
+
 ' Get value from DB informaiton --------------------------------------------------------------------------------------------------------------------
 Private Function GetFieldNameFromDbInfoBy(db_info, entity_name As String, Optional prop_name As String)
     If prop_name <> "" Then GetFieldNameFromDbInfoBy = db_info(entity_name)(DBINFO_PROPERTIES)(prop_name)(DBINFO_FIELD_NAME)
@@ -1927,6 +1818,32 @@ Private Function GetFieldNamesStringFromDbInfoBy(db_Infos, entity_name As String
     GetFieldNamesStringFromDbInfoBy = Join(fns.Keys, ",")
 End Function
 
+Private Function GetPropertyNamesFromDbInfoBy(entity_name As String) As Collection
+    Dim col As New Collection, prop As Collection
+    
+    For Each prop In dbInfo_(entity_name)(DBINFO_PROPERTIES)
+        If prop(DBINFO_FIELD_NAME) <> "" Then Call col.Add(prop(DBINFO_PROPERTY_NAME))
+    Next
+    
+    Set GetPropertyNamesFromDbInfoBy = col
+End Function
+
+Private Function GetRelatedPropFromDbInfoBy(entity_name As String) As Collection
+    Dim col As New Collection, prop As Collection
+    
+    For Each prop In dbInfo_(entity_name)(DBINFO_PROPERTIES)
+        If prop(DBINFO_FIELD_NAME) = "" Then Call col.Add(prop)
+    Next
+    
+    Set GetRelatedPropFromDbInfoBy = col
+End Function
+
+Private Function GetDbInfoSqlFieldNameBy(entity_name As String, property_name As String) As String
+    GetDbInfoSqlFieldNameBy = dbInfo_(entity_name)(DBINFO_SQL_TABLE_NAME) & "." & dbInfo_(entity_name)(DBINFO_PROPERTIES)(property_name)(DBINFO_FIELD_NAME)
+End Function
+
+
+
 
 
 
@@ -1936,6 +1853,14 @@ Public Function CanGetAdoxKey() As Boolean
    CanGetAdoxKey = InStr(cn_.PROVIDER, "SQL") = 0
 End Function
 
+Private Function IsRelatedPropertyUniqueKey(prop) As Boolean
+    Dim rp, re
+    
+    re = prop(DBINFO_PROPERTY_TYPE_NAME)
+    rp = prop(DBINFO_RELATED_PROPERTY_NAME)
+    
+    IsRelatedPropertyUniqueKey = dbInfo_(re)(DBINFO_PROPERTIES)(rp)(DBINFO_IS_UNIQUE_KEY)
+End Function
 
 
 ' Useful functions -------------------------------------------------------------------
@@ -1949,4 +1874,36 @@ Private Function CollectionContain(col As Collection, val) As Boolean
         If c = val Then CollectionContain = True: Exit Function
     Next
 End Function
+
+Private Function ConvertRecordRowsToCollection(rsw) As Collection
+    Dim col As New Collection, i As Long, j As Long
+    For j = 1 To UBound(rsw, 2) + 1
+        Dim arr: ReDim arr(1 To UBound(rsw, 1) + 1)
+        For i = 1 To UBound(rsw, 1) + 1
+            arr(i) = rsw(i - 1, j - 1)
+        Next i
+        Call col.Add(arr, CStr(j))
+    Next j
+    Set ConvertRecordRowsToCollection = col
+End Function
+
+Private Function ConvertCollectionToDictionaryWithIndexKey(col As Collection) As Dictionary
+    Dim dic As New Dictionary, c, i As Long
+    i = 1
+    For Each c In col
+        Call dic.Add(CStr(i), c)
+        i = i + 1
+    Next
+    Set ConvertCollectionToDictionaryWithIndexKey = dic
+End Function
+
+Private Function IsNullOrEmptyOrZeroOrWhiteSpace(v As Variant) As Boolean
+    IsNullOrEmptyOrZeroOrWhiteSpace = True
+    If IsNull(v) Then Exit Function
+    If IsEmpty(v) Then Exit Function
+    If vbInteger <= VarType(v) And VarType(v) <= vbCurrency Then If (v) = 0 Then Exit Function
+    If VarType(v) = vbString Then If (v) = "" Then Exit Function
+    IsNullOrEmptyOrZeroOrWhiteSpace = False
+End Function
+
 

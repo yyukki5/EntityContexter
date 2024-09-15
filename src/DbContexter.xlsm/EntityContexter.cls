@@ -303,7 +303,7 @@ Public Function SetQueryThenInclude(property_name As String) As String
     lastIncludedEntityName_ = related_entity_name
 End Function
 
-Public Function FetchRecords(entity_name As String, dbc As Object)
+Public Function FetchRecords(dbc As Object)
     Dim rs As Recordset, qry As String, re As Collection, records_rows As Collection
     
     qry = querySelect_ & vbCrLf & queryField_ & vbCrLf & queryFrom_ & vbCrLf & queryJoin_ & vbCrLf & queryWhere_ & vbCrLf & queryOrder_
@@ -313,7 +313,7 @@ Public Function FetchRecords(entity_name As String, dbc As Object)
     If rs.BOF And rs.EOF Then GoTo errFetchQuery
         
     Set records_rows = ConvertRecordRowsToCollection(rs.GetRows)
-    Set re = FetchRecsSubRecursive(records_rows, entity_name, entity_name, dbc, cnt:=0)
+    Set re = FetchRecsSubRecursive(records_rows, baseEntityName_, baseEntityName_, dbc, cnt:=0)
     
     ' todo take, skip, first
     Set FetchRecords = re
@@ -1178,7 +1178,6 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add "Option Explicit"
         .Add ""
         .Add "Private ec_ As EntityContexter"
-        .Add "Private entity_name_ As String"
         .Add ""
         .Add "Private Sub Class_Initialize()"
         .Add "    Set ec_ = New EntityContexter"
@@ -1192,7 +1191,7 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add ""
         .Add ""
         .Add "Public Function DbSet(entity_name As String) As " & dbc_name
-        .Add "        Call ec_.SetQueryDbSet(entity_name):    entity_name_ = entity_name:     Set DbSet = Me"
+        .Add "        Call ec_.SetQueryDbSet(entity_name):     Set DbSet = Me"
         .Add "End Function"
         .Add ""
         .Add "Public Function Where(property_name As String, sql_operator As String, compare_value As String, Optional entity_name As String) As " & dbc_name
@@ -1220,7 +1219,7 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add "End Function"
         .Add ""
         .Add "Public Function ToList() As Variant"
-        .Add "    Set ToList = ec_.FetchRecords(entity_name_, Me)"
+        .Add "    Set ToList = ec_.FetchRecords(Me)"
         .Add "End Function"
         .Add ""
         .Add ""

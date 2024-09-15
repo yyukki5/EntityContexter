@@ -106,6 +106,7 @@ Private querySelect_ As String
 Private queryField_ As String
 Private queryFrom_ As String
 Private queryJoin_ As String
+Private queryJoins_ As Dictionary
 Private queryWhere_ As String
 Private queryOrder_ As String
 Private lastIncludedEntityName_ As String
@@ -231,6 +232,7 @@ Public Function SetQueryDbSet(entity_name) As String
     querySelect_ = "select "
     queryField_ = ""
     queryJoin_ = ""
+    Set queryJoins_ = New Dictionary
     queryWhere_ = ""
     queryOrder_ = ""
     
@@ -262,7 +264,7 @@ End Function
 
 Public Function SetQueryInclude(property_name As String) As String
     Dim base_table As String, base_field As String, related_table As String, related_field As String, base_prop_name As String, related_prop_name As String, related_entity_name As String
-    Dim prop As Collection, full_name As String
+    Dim prop As Collection, full_name As String, qry As String
         
     base_prop_name = dbInfo_(baseEntityName_)(DBINFO_PROPERTIES)(property_name)(DBINFO_BASE_PROPERTY_NAME)
     related_prop_name = dbInfo_(baseEntityName_)(DBINFO_PROPERTIES)(property_name)(DBINFO_RELATED_PROPERTY_NAME)
@@ -272,8 +274,11 @@ Public Function SetQueryInclude(property_name As String) As String
     related_table = dbInfo_(related_entity_name)(DBINFO_SQL_TABLE_NAME)
     related_field = dbInfo_(related_entity_name)(DBINFO_PROPERTIES)(related_prop_name)(DBINFO_FIELD_NAME)
     
-    queryJoin_ = queryJoin_ & _
-        " left outer join " & related_table & " on " & base_table & ".[" & base_field & "] = " & related_table & ".[" & related_field & "]" & vbCrLf
+    qry = " left outer join " & related_table & " on " & base_table & ".[" & base_field & "] = " & related_table & ".[" & related_field & "]" & vbCrLf
+    If queryJoins_.Exists(qry) = False Then
+        queryJoin_ = queryJoin_ & qry
+        Call queryJoins_.Add(qry, qry)
+    End If
     
     includedConnectTableString_ = baseEntityName_
     includedConnectTableString_ = includedConnectTableString_ & property_name
@@ -285,7 +290,7 @@ End Function
 
 Public Function SetQueryThenInclude(property_name As String) As String
     Dim base_table As String, base_field As String, related_table As String, related_field As String, base_prop_name As String, related_prop_name As String, related_entity_name As String
-    Dim prop As Collection, full_name As String
+    Dim prop As Collection, full_name As String, qry As String
     
     base_prop_name = dbInfo_(lastIncludedEntityName_)(DBINFO_PROPERTIES)(property_name)(DBINFO_BASE_PROPERTY_NAME)
     related_prop_name = dbInfo_(lastIncludedEntityName_)(DBINFO_PROPERTIES)(property_name)(DBINFO_RELATED_PROPERTY_NAME)
@@ -295,8 +300,11 @@ Public Function SetQueryThenInclude(property_name As String) As String
     related_table = dbInfo_(related_entity_name)(DBINFO_SQL_TABLE_NAME)
     related_field = dbInfo_(related_entity_name)(DBINFO_PROPERTIES)(related_prop_name)(DBINFO_FIELD_NAME)
     
-    queryJoin_ = queryJoin_ & _
-        " left outer join " & related_table & " on " & base_table & ".[" & base_field & "] = " & related_table & ".[" & related_field & "]" & vbCrLf
+    qry = " left outer join " & related_table & " on " & base_table & ".[" & base_field & "] = " & related_table & ".[" & related_field & "]" & vbCrLf
+    If queryJoins_.Exists(qry) = False Then
+        queryJoin_ = queryJoin_ & qry
+        Call queryJoins_.Add(qry, qry)
+    End If
     
     includedConnectTableString_ = includedConnectTableString_ & property_name
 
@@ -332,6 +340,7 @@ On Error GoTo errCommit
     Exit Function
 errCommit:
     Call RollbackTransaction
+    Call Err.Raise(100000, Err.Source & vbCrLf & "EntityContexter.SaveChanges()", "Failed to save changes")
 End Function
 
 
@@ -357,7 +366,7 @@ On Error GoTo errOpen
 
 errOpen:
     DisconnectDb
-    Err.Raise Err.Number, Err.Source & vbCrLf & "EntityContexter.Add()", Err.Description
+    Call Err.Raise(Err.Number, Err.Source & vbCrLf & "EntityContexter.Add()", Err.Description)
 End Function
 
 Private Function AddRelatedEntity(rec As Object, DbInfo As Object)
@@ -1625,8 +1634,10 @@ Private Function SetQueryField(table_name As String, props As Variant)
     For Each prop In props
         If prop(DBINFO_FIELD_NAME) <> "" Then
             full_name = includedConnectTableString_ & prop(DBINFO_PROPERTY_NAME)
-            queryField_ = queryField_ & vbCrLf & table_name & ".[" & prop(DBINFO_FIELD_NAME) & "]" & " as " & ConvertDbInfoFullNameToColumnName(full_name) & ", "
-            If queryFields_.Exists(full_name) = False Then Call queryFields_.Add(full_name, queryFields_.Count + 1)
+            If queryFields_.Exists(full_name) = False Then
+                queryField_ = queryField_ & vbCrLf & table_name & ".[" & prop(DBINFO_FIELD_NAME) & "]" & " as " & ConvertDbInfoFullNameToColumnName(full_name) & ", "
+                Call queryFields_.Add(full_name, queryFields_.Count + 1)
+            End If
         End If
     Next
     

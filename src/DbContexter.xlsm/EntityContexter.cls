@@ -688,13 +688,6 @@ End Function
 Private Function ConvertToSqlTableNameBy(table_name As String, Optional schema_name As String) As String
     ConvertToSqlTableNameBy = IIf(schema_name = "", "[" & table_name & "]", "[" & schema_name & "]." & "[" & table_name & "]")
 End Function
-'Private Function ConvertToTableNameBy(sql_table_name As String) As String
-'    If InStr(sql_table_name, "].[") > 0 Then
-'        ConvertToTableNameBy = Mid(sql_table_name, InStr(sql_table_name, "].[") + 2, Len(sql_table_name) - 1)
-'    Else
-'        ConvertToTableNameBy = Mid(sql_table_name, 2, Len(sql_table_name) - 2)
-'    End If
-'End Function
 
 Private Function GetEntityInfoByTableName(table_name_info As Collection) As Collection
     Dim props As New Collection, prop As Collection, tbl As ADOX.Table, col As ADOX.Column, entity_info As New Collection
@@ -917,7 +910,6 @@ Private Function GetPropertyInfoOfRelatedEntity(table_name As String)
     Call prop.Add(propertyName, ENTIINFO_PROPERTY_NAME)
     Call prop.Add(propertyFieldName, ENTIINFO_PROPERTY_FIELD_NAME)
     Call prop.Add(propertyTypeName, ENTIINFO_PROPERTY_TYPE)
-'    Call prop.Add(col, KEY_DB_ADOX_COLUMN)
     Call prop.Add("", ENTIINFO_DB_FIELD_NAME)
     
 '    Call prop.Add(True, KEY_ENTITY_IS_PROPERTY_RELATED)
@@ -945,7 +937,6 @@ Private Function GetPropertyInfoOfRelatedEntities(related_table_name As String)
     Call prop.Add(propertyName, ENTIINFO_PROPERTY_NAME)
     Call prop.Add(propertyFieldName, ENTIINFO_PROPERTY_FIELD_NAME)
     Call prop.Add(propertyTypeName, ENTIINFO_PROPERTY_TYPE)
-'    Call prop.Add(col, KEY_DB_ADOX_COLUMN)
     Call prop.Add("", ENTIINFO_DB_FIELD_NAME)
     
 '    Call prop.Add(True, KEY_ENTITY_IS_PROPERTY_RELATED)
@@ -1040,30 +1031,6 @@ Private Function GetIsAutoNumberField(col As ADOX.Column, table_name As String) 
     End If
     
 End Function
-
-
-'Private Function GetPropertyInfoByForeignKey(key_table_name As String, col As ADOX.Column)
-'    Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
-'
-'    propertyName = ConvertDbTableNameToEntitesClassName(key_table_name)
-'    propertyFieldName = ConvertDbTableNameToEntitiesClassFieldName(key_table_name)
-'    propertyTypeName = propertyName
-'
-'    Dim prop As New Collection
-'    Call prop.Add(propertyName, KEY_ENTITY_PROPERTY_NAME)
-'    Call prop.Add(propertyFieldName, KEY_ENTITY_FIELD_NAME)
-'    Call prop.Add(propertyTypeName, KEY_ENTITY_PROPERTY_TYPE)
-'    Call prop.Add(True, KEY_ENTITY_IS_PROPERTY_RELATED)
-'    Call prop.Add(col, KEY_DB_ADOX_COLUMN)
-'    Call prop.Add(col.Name, KEY_DB_FIELD_NAME)
-'    Call prop.Add(col.RelatedColumn, KEY_ENTITY_FOREIGNKEY)
-'    Call prop.Add(key_table_name, KEY_ENTITY_FOREIGN_TABLE)
-'    Call prop.Add("", KEY_ENTITY_INVERSE_FOREIGNKEY)
-'    Call prop.Add("", KEY_ENTITY_INVERSE_FOREIGN_TABLE)
-'
-'    Set GetPropertyInfoByForeignKey = prop
-'End Function
-
 
 Private Function CreateDbContext(entity_Infos As Collection, dbcontext_name As String)
     Dim codeDbcClass As String

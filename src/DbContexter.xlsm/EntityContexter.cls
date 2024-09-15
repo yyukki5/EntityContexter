@@ -353,15 +353,15 @@ On Error GoTo errOpen
     OpenDb
     cn_.CursorLocation = adUseClient
     
-    Call AddRelatedEntity(rec, dbInfo_)
+    Call AddRelatedEntity(rec)
                 
-    If HasPrimaryKey(rec, dbInfo_) = False Then If ExistUniqueRecord(rec, dbInfo_) Then Call Err.Raise(10003, "EntityContexter.Add()", "Record is already exist")
+    If GetDbInfoHasPrimaryKeyBy(TypeName(rec)) = False Then If ExistUniqueRecord(rec) Then Call Err.Raise(10003, "EntityContexter.Add()", "Record is already exist")
     Call BeginTransaction
     Call rs.Open(Source:=dbInfo_(TypeName(rec))(KEY_SQL_TABLE_NAME), ActiveConnection:=cn_, LockType:=adLockOptimistic)
     Call rs.AddNew(GetFieldsListByEntity(rec, dbInfo_), GetValuesListByEntity(rec, dbInfo_))
     Call SetAutoincrementFieldsValues(rs, rec, dbInfo_)
     
-    Call AddRelatedEntities(rec, dbInfo_)
+    Call AddRelatedEntities(rec)
     Exit Function
 
 errOpen:
@@ -369,11 +369,11 @@ errOpen:
     Call Err.Raise(Err.Number, Err.Source & vbCrLf & "EntityContexter.Add()", Err.Description)
 End Function
 
-Private Function AddRelatedEntity(rec As Object, DbInfo As Object)
+Private Function AddRelatedEntity(rec As Object)
     Dim prop As Collection, ent_name As String, is_related_field_index As Boolean, r As Object, v As Variant
     Dim related_entity_properties As New Collection
     
-    Set related_entity_properties = GetRelatedEntityEntitiesProperty(rec, DbInfo, is_entity:=True)
+    Set related_entity_properties = GetRelatedEntityEntitiesProperty(rec, is_entity:=True)
     
     For Each prop In related_entity_properties
         Set r = CallByName(rec, prop(DBINFO_PROPERTY_NAME), VbGet)
@@ -385,11 +385,11 @@ Private Function AddRelatedEntity(rec As Object, DbInfo As Object)
         End If
     Next
 End Function
-Private Function AddRelatedEntities(rec As Object, DbInfo As Object)
+Private Function AddRelatedEntities(rec As Object)
     Dim prop As Collection, ent_name As String, is_related_field_index As Boolean, r As Object, v As Variant
     Dim related_entities_properties As New Collection
 
-    Set related_entities_properties = GetRelatedEntityEntitiesProperty(rec, DbInfo, is_entity:=False)
+    Set related_entities_properties = GetRelatedEntityEntitiesProperty(rec, is_entity:=False)
     
     For Each prop In related_entities_properties
         For Each r In CallByName(rec, prop(DBINFO_PROPERTY_NAME), VbGet)
@@ -400,15 +400,15 @@ Private Function AddRelatedEntities(rec As Object, DbInfo As Object)
     Next
     
 End Function
-Private Function GetRelatedEntityEntitiesProperty(rec As Object, DbInfo As Object, is_entity As Boolean) As Collection
+Private Function GetRelatedEntityEntitiesProperty(rec As Object, is_entity As Boolean) As Collection
     Dim prop As Collection, ent_name As String, is_related_field_index As Boolean
     Dim related_properties As New Collection
 
-    For Each prop In DbInfo(TypeName(rec))(DBINFO_PROPERTIES)
+    For Each prop In dbInfo_(TypeName(rec))(DBINFO_PROPERTIES)
         If prop(DBINFO_FIELD_NAME) = "" Then
-            ent_name = GetEntityName(rec, prop, DbInfo)
+            ent_name = GetEntityName(rec, prop, dbInfo_)
             If ent_name <> "Nothing" Then
-                is_related_field_index = DbInfo(ent_name)(DBINFO_PROPERTIES)(prop(DBINFO_RELATED_PROPERTY_NAME))(DBINFO_IS_UNIQUE_KEY)
+                is_related_field_index = dbInfo_(ent_name)(DBINFO_PROPERTIES)(prop(DBINFO_RELATED_PROPERTY_NAME))(DBINFO_IS_UNIQUE_KEY)
                 If is_related_field_index = is_entity Then
                     Call related_properties.Add(prop)
                 End If
@@ -453,11 +453,18 @@ On Error GoTo errOpen
     Call OpenDb
     cn_.CursorLocation = adUseClient
     
-    If HasPrimaryKey(rec, dbInfo_) = False Then Call Err.Raise(10001, "EntityContexter.Update()", "Table has no primary key")
-    If ExistUniqueRecord(rec, dbInfo_) = False Then Call Err.Raise(10002, "EntityContexter.Update()", "Not found records")
+    Call UpdateRelatedEntity(rec)
+
+    If GetDbInfoHasPrimaryKeyBy(TypeName(rec)) = False Then Call Err.Raise(10001, "EntityContexter.Update()", "Table has no primary key")
+    If ExistUniqueRecord(rec) = False Then
+        Call Add(rec)
+'        Call Err.Raise(10002, "EntityContexter.Update()", "Not found records")
+    Else
+        Call BeginTransaction
+        Call cn_.Execute(CommandText:=CreateUpdateQuery(rec))
+    End If
     
-    Call BeginTransaction
-    Call cn_.Execute(CommandText:=CreateUpdateQuery(rec, dbInfo_))
+    Call UpdateRelatedEntities(rec)
     Exit Function
 
 errOpen:
@@ -465,16 +472,70 @@ errOpen:
     Err.Raise Err.Number, Err.Source & vbCrLf & "EntityContexter.Update()", Err.Description
 End Function
 
+
+Private Function UpdateRelatedEntity(rec As Object)
+    Dim prop As Collection, ent_name As String, is_related_field_index As Boolean, r As Object, v As Variant
+    Dim related_entity_properties As New Collection
+    
+    Set related_entity_properties = GetRelatedEntityEntitiesProperty(rec, is_entity:=True)
+    
+    For Each prop In related_entity_properties
+        Set r = CallByName(rec, prop(DBINFO_PROPERTY_NAME), VbGet)
+        Dim pky_value: pky_value = CallByName(r, prop(DBINFO_RELATED_PROPERTY_NAME), VbGet)
+        If IsNullOrEmptyOrZeroOrWhiteSpace(pky_value) Then
+            Call Add(r)
+            v = CallByName(r, prop(DBINFO_RELATED_PROPERTY_NAME), VbGet)
+            Call CallByName(rec, prop(DBINFO_BASE_PROPERTY_NAME), VbLet, (v))
+        Else
+            Call Update(r)
+        End If
+    Next
+End Function
+Private Function UpdateRelatedEntities(rec As Object)
+    Dim prop As Collection, ent_name As String, is_related_field_index As Boolean, r As Object, v As Variant
+    Dim related_entities_properties As New Collection
+
+    Set related_entities_properties = GetRelatedEntityEntitiesProperty(rec, is_entity:=False)
+    
+    For Each prop In related_entities_properties
+        For Each r In CallByName(rec, prop(DBINFO_PROPERTY_NAME), VbGet)
+            Dim pky_prop_name:
+            pky_prop_name = GetDbInfoPrimaryKeyPropertyBy(TypeName(r))(DBINFO_PROPERTY_NAME)
+            Dim pky_value: pky_value = CallByName(r, pky_prop_name, VbGet)
+            
+            If IsNullOrEmptyOrZeroOrWhiteSpace(pky_value) Then
+                v = CallByName(rec, prop(DBINFO_BASE_PROPERTY_NAME), VbGet)
+                Call CallByName(r, prop(DBINFO_RELATED_PROPERTY_NAME), VbLet, (v))
+                Call Add(r)
+            Else
+                Call Update(r)
+            End If
+        Next
+    Next
+    
+End Function
+
+Private Function GetDbInfoPrimaryKeyPropertyBy(entity_name As String) As Collection
+    Dim prop As Collection
+    
+    For Each prop In dbInfo_(entity_name)(DBINFO_PROPERTIES)
+        If prop(DBINFO_IS_PRIMARY_KEY) Then Set GetDbInfoPrimaryKeyPropertyBy = prop: Exit Function
+    Next
+
+End Function
+
+
+
 Public Function Remove(rec As Object)
     
 On Error GoTo errOpen
     If cn_.State <> adStateOpen Then cn_.Open
     cn_.CursorLocation = adUseClient
-    If HasPrimaryKey(rec, dbInfo_) = False Then Call Err.Raise(10001, "EntityContexter.Remove()", "Table has no primary key")
-    If ExistUniqueRecord(rec, dbInfo_) = False Then Call Err.Raise(10002, "EntityContexter.Remove()", "Not found records")
+    If GetDbInfoHasPrimaryKeyBy(TypeName(rec)) = False Then Call Err.Raise(10001, "EntityContexter.Remove()", "Table has no primary key")
+    If ExistUniqueRecord(rec) = False Then Call Err.Raise(10002, "EntityContexter.Remove()", "Not found records")
     
     Call BeginTransaction
-    Call cn_.Execute(CommandText:=CreateDeleteQuery(rec, dbInfo_))
+    Call cn_.Execute(CommandText:=CreateDeleteQuery(rec))
     Exit Function
 
 errOpen:
@@ -509,29 +570,28 @@ Private Function SetAutoincrementFieldsValues(rs As ADODB.Recordset, rec As Obje
     Next
 End Function
 
-Private Function HasPrimaryKey(rec As Object, DbInfo As Object) As Boolean
-    Dim ind As ADOX.Index
+Private Function GetDbInfoHasPrimaryKeyBy(entity_name As String) As Boolean
+    Dim prop As Collection
     
-    Set catalog_.ActiveConnection = cn_
-    For Each ind In catalog_.Tables(DbInfo(TypeName(rec))(DBINFO_TABLE_NAME)).Indexes
-        If ind.PrimaryKey Then HasPrimaryKey = True: Exit Function
+    For Each prop In dbInfo_(entity_name)(DBINFO_PROPERTIES)
+        If prop(DBINFO_IS_PRIMARY_KEY) Then GetDbInfoHasPrimaryKeyBy = True
     Next
-       
+    
 End Function
 
-Private Function ExistUniqueRecord(rec As Object, dbInfos As Object) As Boolean
+Private Function ExistUniqueRecord(rec As Object) As Boolean
     Dim qry As String
-    qry = "select * from " & dbInfos(TypeName(rec))(DBINFO_SQL_TABLE_NAME) & GetQueryPrimaryWhere(rec, dbInfos)
+    qry = "select * from " & dbInfo_(TypeName(rec))(DBINFO_SQL_TABLE_NAME) & GetQueryPrimaryWhere(rec)
     ExistUniqueRecord = cn_.Execute(CommandText:=qry).RecordCount = 1
 End Function
 
-Private Function GetQueryPrimaryWhere(rec As Object, db_Infos As Object) As String
+Private Function GetQueryPrimaryWhere(rec As Object) As String
     Dim qry As String, prop As Collection
     
     qry = " Where "
-    For Each prop In db_Infos(TypeName(rec))(DBINFO_PROPERTIES)
+    For Each prop In dbInfo_(TypeName(rec))(DBINFO_PROPERTIES)
         If prop(DBINFO_IS_PRIMARY_KEY) Then
-            qry = qry & db_Infos(TypeName(rec))(DBINFO_SQL_TABLE_NAME) & ".[" & prop(DBINFO_FIELD_NAME) & "] = " & ConvertValueToSqlQuery(prop(DBINFO_PROPERTY_NAME), rec, db_Infos) & ", "
+            qry = qry & dbInfo_(TypeName(rec))(DBINFO_SQL_TABLE_NAME) & ".[" & prop(DBINFO_FIELD_NAME) & "] = " & ConvertValueToSqlQuery(prop(DBINFO_PROPERTY_NAME), rec, dbInfo_) & ", "
         End If
     Next
     qry = Left(qry, Len(qry) - 2)
@@ -554,25 +614,25 @@ End Function
 
 
 
-Private Function CreateDeleteQuery(rec As Object, DbInfo As Object) As String
+Private Function CreateDeleteQuery(rec As Object) As String
     Dim table_name As String, key_prop_name As String, key_field_name As String, key_value As Variant
     
     ' todo update to delete related table's record by using inner join.
-    CreateDeleteQuery = "Delete From " & DbInfo(TypeName(rec))(DBINFO_SQL_TABLE_NAME) & GetQueryPrimaryWhere(rec, DbInfo)
+    CreateDeleteQuery = "Delete From " & DbInfo(TypeName(rec))(DBINFO_SQL_TABLE_NAME) & GetQueryPrimaryWhere(rec)
     
 End Function
 
-Private Function CreateUpdateQuery(rec As Object, DbInfo As Object) As String
+Private Function CreateUpdateQuery(rec As Object) As String
     Dim table_name As String, key_prop_name As String, key_field_name As String, key_value As Variant, qry As String, prop As Collection
     
-    qry = "Update " & DbInfo(TypeName(rec))(DBINFO_SQL_TABLE_NAME) & " set "
-    For Each prop In DbInfo(TypeName(rec))(DBINFO_PROPERTIES)
+    qry = "Update " & dbInfo_(TypeName(rec))(DBINFO_SQL_TABLE_NAME) & " set "
+    For Each prop In dbInfo_(TypeName(rec))(DBINFO_PROPERTIES)
         If prop(DBINFO_FIELD_NAME) <> "" Then
             If prop(DBINFO_IS_AUTONUMBER) = False Then _
-                qry = qry & "[" & prop(DBINFO_FIELD_NAME) & "] = " & ConvertValueToSqlQuery((prop(DBINFO_PROPERTY_NAME)), rec, DbInfo) & ", "
+                qry = qry & "[" & prop(DBINFO_FIELD_NAME) & "] = " & ConvertValueToSqlQuery((prop(DBINFO_PROPERTY_NAME)), rec, dbInfo_) & ", "
         End If
     Next
-    qry = Left(qry, Len(qry) - 2) & GetQueryPrimaryWhere(rec, DbInfo)
+    qry = Left(qry, Len(qry) - 2) & GetQueryPrimaryWhere(rec)
     
     CreateUpdateQuery = qry
 End Function

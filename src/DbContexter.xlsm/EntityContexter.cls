@@ -10,7 +10,7 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' Entity Contexer -----------------------------------------------------------------
-' Version   : 0.5.0
+' Version   : 0.5.1
 ' Project   : https://github.com/yyukki5/EntityContexter
 ' Depend on : Microsoft ActiveX Data Objects X.X Library, Microsoft ADO Ext. 2.8 for DDL and Security, Microsoft Scripting RunTime
 ' Before Using : Need to check "Trust access to the VBA project object model"
@@ -50,9 +50,6 @@ Private Const DBINFO_INDEX As String = "DbIsPrimaryKey"
 Private Const DBINFO_BASE_PROPERTY_NAME As String = "DbBaseProperty"
 Private Const DBINFO_RELATED_PROPERTY_NAME As String = "DbRelatedProperty"
 
-Private Const INCLUDE_ENTITY_NAME As String = "EntityName"
-Private Const INCLUDE_PROPERTIES As String = "Properties"
-
 Private Const KEY_DB_RELATED_TABLE_NAME As String = "RelationBaseTableName"
 Private Const KEY_DB_RELATED_FIELD_NAME As String = "RelationBaseFieldName"
 Private Const KEY_DB_BASE_KEY_TABLE_NAME As String = "RelationRelatedTableName"
@@ -64,18 +61,15 @@ Private Const SQL_TABLE_AS As String = "T"
 
 Private cn_ As ADODB.Connection
 Private catalog_ As ADOX.Catalog
-Private isExportFiles_ As Boolean
-Private schemaName_ As String
-Private connectionString_ As String
 Private isTransactionActive_ As Boolean
+Private schemaName_ As String
+Private isExportFiles_ As Boolean
 
 Private baseEntityName_ As String
-
 Private querySelect_ As String
 Private queryField_ As String
 Private queryFrom_ As String
 Private queryJoin_ As String
-Private queryJoins_ As Dictionary
 Private queryWhere_ As String
 Private queryOrder_ As String
 Private lastIncludedEntityName_ As String
@@ -92,10 +86,9 @@ Private Sub Class_Initialize()
     isExportFiles_ = True
 End Sub
 
-Public Function Initialize(connectionString As String) As EntityContexter
+Public Function Initialize(connection_string As String) As EntityContexter
     
-    connectionString_ = connectionString
-    cn_.connectionString = connectionString
+    cn_.ConnectionString = connection_string
     
     Set Initialize = Me
 End Function
@@ -107,8 +100,8 @@ Private Sub Class_Terminate()
 End Sub
 
 ' Properties -------------------------------------------------------------------------------
-Public Property Set DbInfo(v As Object)
-    Set dbInfo_ = v
+Public Property Set DbInfo(db_info As Object)
+    Set dbInfo_ = db_info
 End Property
 
 
@@ -193,20 +186,17 @@ End Function
 
 Public Function SetQueryDbSet(entity_name) As String
     baseEntityName_ = entity_name
-    Set queryFields_ = New Dictionary
 
     includedConnectTableString_ = ""
     includedConnectTableString_ = baseEntityName_
     
+    Set queryFields_ = New Dictionary
     querySelect_ = "select "
     queryField_ = ""
     queryJoin_ = ""
-    Set queryJoins_ = New Dictionary
     queryWhere_ = ""
     queryOrder_ = ""
-    
-'    Call SetQueryField((dbInfo_(baseEntityName_)(DBINFO_SQL_TABLE_NAME)), dbInfo_(baseEntityName_)(DBINFO_PROPERTIES))
-    
+        
     Call SetQueryField("[" & SQL_TABLE_AS & "]", dbInfo_(baseEntityName_)(DBINFO_PROPERTIES))
     queryFrom_ = "from " & dbInfo_(baseEntityName_)(DBINFO_SQL_TABLE_NAME) & " as [" & SQL_TABLE_AS & "] " & vbCrLf
     
@@ -232,13 +222,13 @@ Public Function SetQueryThenBy(property_name As String, Optional entity_name As 
 End Function
 
 Public Function SetQueryInclude(property_name As String) As String
-    Dim base_table As String, base_field As String, related_table As String, related_field As String, base_prop_name As String, related_prop_name As String, related_entity_name As String
+    Dim base_field As String, related_table As String, related_field As String, base_prop_name As String, related_prop_name As String, related_entity_name As String
     Dim prop As Collection, full_name As String, qry As String
         
+    On Error GoTo errNotFoundProperty
     base_prop_name = dbInfo_(baseEntityName_)(DBINFO_PROPERTIES)(property_name)(DBINFO_BASE_PROPERTY_NAME)
     related_prop_name = dbInfo_(baseEntityName_)(DBINFO_PROPERTIES)(property_name)(DBINFO_RELATED_PROPERTY_NAME)
     related_entity_name = dbInfo_(baseEntityName_)(DBINFO_PROPERTIES)(property_name)(DBINFO_PROPERTY_TYPE_NAME)
-    base_table = dbInfo_(baseEntityName_)(DBINFO_SQL_TABLE_NAME)
     base_field = dbInfo_(baseEntityName_)(DBINFO_PROPERTIES)(base_prop_name)(DBINFO_FIELD_NAME)
     related_table = dbInfo_(related_entity_name)(DBINFO_SQL_TABLE_NAME)
     related_field = dbInfo_(related_entity_name)(DBINFO_PROPERTIES)(related_prop_name)(DBINFO_FIELD_NAME)
@@ -257,17 +247,20 @@ Public Function SetQueryInclude(property_name As String) As String
     
     lastIncludedEntityName_ = related_entity_name
     lastTableAsIndex_ = lastTableAsIndex_ + 1
+    Exit Function
     
+errNotFoundProperty:
+    Call Err.Raise(100001, Err.Source & vbCrLf & "EntityContexter.SetQueryInclude(" & property_name & ")", "Not found property in DbInfo")
 End Function
 
 Public Function SetQueryThenInclude(property_name As String) As String
-    Dim base_table As String, base_field As String, related_table As String, related_field As String, base_prop_name As String, related_prop_name As String, related_entity_name As String
+    Dim base_field As String, related_table As String, related_field As String, base_prop_name As String, related_prop_name As String, related_entity_name As String
     Dim prop As Collection, full_name As String, qry As String
     
+    On Error GoTo errNotFoundProperty
     base_prop_name = dbInfo_(lastIncludedEntityName_)(DBINFO_PROPERTIES)(property_name)(DBINFO_BASE_PROPERTY_NAME)
     related_prop_name = dbInfo_(lastIncludedEntityName_)(DBINFO_PROPERTIES)(property_name)(DBINFO_RELATED_PROPERTY_NAME)
     related_entity_name = dbInfo_(lastIncludedEntityName_)(DBINFO_PROPERTIES)(property_name)(DBINFO_PROPERTY_TYPE_NAME)
-    base_table = dbInfo_(lastIncludedEntityName_)(DBINFO_SQL_TABLE_NAME)
     base_field = dbInfo_(lastIncludedEntityName_)(DBINFO_PROPERTIES)(base_prop_name)(DBINFO_FIELD_NAME)
     related_table = dbInfo_(related_entity_name)(DBINFO_SQL_TABLE_NAME)
     related_field = dbInfo_(related_entity_name)(DBINFO_PROPERTIES)(related_prop_name)(DBINFO_FIELD_NAME)
@@ -286,7 +279,10 @@ Public Function SetQueryThenInclude(property_name As String) As String
       
     lastIncludedEntityName_ = related_entity_name
     lastTableAsIndex_ = lastTableAsIndex_ + 1
+    Exit Function
     
+errNotFoundProperty:
+    Call Err.Raise(100001, Err.Source & vbCrLf & "EntityContexter.SetQueryThenInclude(" & property_name & ")", "Not found property in DbInfo of " & lastIncludedEntityName_)
 End Function
 
 Public Function SetQuerySelect(property_name As String, Optional entity_name As String)
@@ -320,12 +316,14 @@ errFetchQuery:
 End Function
 
 Public Function SaveChanges()
+
 On Error GoTo errCommit
     Call CommitTransaction
     Exit Function
 errCommit:
     Call RollbackTransaction
     Call Err.Raise(10000, Err.Source & vbCrLf & "EntityContexter.SaveChanges()", "Failed to save changes")
+
 End Function
 
 Public Function Add(rec As Object)

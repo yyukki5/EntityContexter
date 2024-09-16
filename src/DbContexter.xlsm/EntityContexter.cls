@@ -1642,7 +1642,8 @@ Private Function ConvertValueToSqlQuery(prop_name As String, rec As Object) As S
     Select Case VarType(v)
         Case vbEmpty:  v = "Null"
         Case vbNull:   v = "Null"
-        Case vbString: v = "'" & v & "'"
+        Case vbBoolean: v = IIf(v, 1, 0)
+        Case vbString: v = "N'" & v & "'"
         Case vbDate
             Select Case field_type
                 Case ADOX.DataTypeEnum.adDBDate: v = Format(v, "'yyyy-MM-dd'")

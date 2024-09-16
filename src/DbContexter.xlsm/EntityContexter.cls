@@ -81,7 +81,7 @@ Private queryOrder_ As String
 Private lastIncludedEntityName_ As String
 Private includedConnectTableString_ As String
 Private queryFields_ As New Dictionary
-Private lastTableAs_ As String
+Private lastTableAsIndex_ As Long
 
 Private dbInfo_ As Collection
 
@@ -210,7 +210,6 @@ Public Function SetQueryDbSet(entity_name) As String
     Call SetQueryField("[" & SQL_TABLE_AS & "]", dbInfo_(baseEntityName_)(DBINFO_PROPERTIES))
     queryFrom_ = "from " & dbInfo_(baseEntityName_)(DBINFO_SQL_TABLE_NAME) & " as [" & SQL_TABLE_AS & "] " & vbCrLf
     
-    lastTableAs_ = SQL_TABLE_AS
 End Function
 
 Public Function SetQueryWhere(property_name As String, sql_operator As String, compare_value As String, Optional entity_name As String)
@@ -245,7 +244,7 @@ Public Function SetQueryInclude(property_name As String) As String
     related_field = dbInfo_(related_entity_name)(DBINFO_PROPERTIES)(related_prop_name)(DBINFO_FIELD_NAME)
         
     Dim r_table_as As String
-    r_table_as = lastTableAs_ & SQL_TABLE_AS
+    r_table_as = SQL_TABLE_AS & lastTableAsIndex_ + 1
     qry = " left outer join " & related_table & " as [" & r_table_as & "] on " _
         & "[" & SQL_TABLE_AS & "].[" & base_field & "] = [" & r_table_as & "].[" & related_field & "]" & vbCrLf
     
@@ -257,7 +256,7 @@ Public Function SetQueryInclude(property_name As String) As String
     Call SetQueryField("[" & r_table_as & "]", dbInfo_(related_entity_name)(DBINFO_PROPERTIES))
     
     lastIncludedEntityName_ = related_entity_name
-    lastTableAs_ = r_table_as
+    lastTableAsIndex_ = lastTableAsIndex_ + 1
     
 End Function
 
@@ -273,10 +272,11 @@ Public Function SetQueryThenInclude(property_name As String) As String
     related_table = dbInfo_(related_entity_name)(DBINFO_SQL_TABLE_NAME)
     related_field = dbInfo_(related_entity_name)(DBINFO_PROPERTIES)(related_prop_name)(DBINFO_FIELD_NAME)
     
-    Dim r_table_as As String
-    r_table_as = lastTableAs_ & SQL_TABLE_AS
+    Dim r_table_as As String, b_table_as As String
+    b_table_as = SQL_TABLE_AS & lastTableAsIndex_
+    r_table_as = SQL_TABLE_AS & lastTableAsIndex_ + 1
     qry = " left outer join " & related_table & " as [" & r_table_as & "] on " _
-        & "[" & lastTableAs_ & "].[" & base_field & "] = [" & r_table_as & "].[" & related_field & "]" & vbCrLf
+        & "[" & b_table_as & "].[" & base_field & "] = [" & r_table_as & "].[" & related_field & "]" & vbCrLf
             
     queryJoin_ = queryJoin_ & qry
     
@@ -285,7 +285,7 @@ Public Function SetQueryThenInclude(property_name As String) As String
     Call SetQueryField("[" & r_table_as & "]", dbInfo_(related_entity_name)(DBINFO_PROPERTIES))
       
     lastIncludedEntityName_ = related_entity_name
-    lastTableAs_ = r_table_as
+    lastTableAsIndex_ = lastTableAsIndex_ + 1
     
 End Function
 

@@ -60,6 +60,7 @@ Private Const KEY_DB_BASE_KEY_FIELD_NAME As String = "RelationRelatedFieldName"
 
 Private Const KEY_DB_AUTOINCREMENT As String = "Autoincrement"
 
+Private Const SQL_TABLE_AS As String = "T"
 
 Private cn_ As ADODB.Connection
 Private catalog_ As ADOX.Catalog
@@ -80,6 +81,7 @@ Private queryOrder_ As String
 Private lastIncludedEntityName_ As String
 Private includedConnectTableString_ As String
 Private queryFields_ As New Dictionary
+Private lastTableAs_ As String
 
 Private dbInfo_ As Collection
 
@@ -203,11 +205,12 @@ Public Function SetQueryDbSet(entity_name) As String
     queryWhere_ = ""
     queryOrder_ = ""
     
-    Call SetQueryField((dbInfo_(baseEntityName_)(DBINFO_SQL_TABLE_NAME)), dbInfo_(baseEntityName_)(DBINFO_PROPERTIES))
-    queryFrom_ = "from " & dbInfo_(baseEntityName_)(DBINFO_SQL_TABLE_NAME) & vbCrLf
-End Function
-
-Public Function SetQuerySelect(db_info, ParamArray property_names())
+'    Call SetQueryField((dbInfo_(baseEntityName_)(DBINFO_SQL_TABLE_NAME)), dbInfo_(baseEntityName_)(DBINFO_PROPERTIES))
+    
+    Call SetQueryField("[" & SQL_TABLE_AS & "]", dbInfo_(baseEntityName_)(DBINFO_PROPERTIES))
+    queryFrom_ = "from " & dbInfo_(baseEntityName_)(DBINFO_SQL_TABLE_NAME) & " as [" & SQL_TABLE_AS & "] " & vbCrLf
+    
+    lastTableAs_ = SQL_TABLE_AS
 End Function
 
 Public Function SetQueryWhere(property_name As String, sql_operator As String, compare_value As String, Optional entity_name As String)
@@ -240,18 +243,21 @@ Public Function SetQueryInclude(property_name As String) As String
     base_field = dbInfo_(baseEntityName_)(DBINFO_PROPERTIES)(base_prop_name)(DBINFO_FIELD_NAME)
     related_table = dbInfo_(related_entity_name)(DBINFO_SQL_TABLE_NAME)
     related_field = dbInfo_(related_entity_name)(DBINFO_PROPERTIES)(related_prop_name)(DBINFO_FIELD_NAME)
+        
+    Dim r_table_as As String
+    r_table_as = lastTableAs_ & SQL_TABLE_AS
+    qry = " left outer join " & related_table & " as [" & r_table_as & "] on " _
+        & "[" & SQL_TABLE_AS & "].[" & base_field & "] = [" & r_table_as & "].[" & related_field & "]" & vbCrLf
     
-    qry = " left outer join " & related_table & " on " & base_table & ".[" & base_field & "] = " & related_table & ".[" & related_field & "]" & vbCrLf
-    If queryJoins_.Exists(qry) = False Then
-        queryJoin_ = queryJoin_ & qry
-        Call queryJoins_.Add(qry, qry)
-    End If
+    queryJoin_ = queryJoin_ & qry
     
     includedConnectTableString_ = baseEntityName_
     includedConnectTableString_ = includedConnectTableString_ & property_name
-    Call SetQueryField(related_table, dbInfo_(related_entity_name)(DBINFO_PROPERTIES))
-       
+    
+    Call SetQueryField("[" & r_table_as & "]", dbInfo_(related_entity_name)(DBINFO_PROPERTIES))
+    
     lastIncludedEntityName_ = related_entity_name
+    lastTableAs_ = r_table_as
     
 End Function
 
@@ -267,17 +273,30 @@ Public Function SetQueryThenInclude(property_name As String) As String
     related_table = dbInfo_(related_entity_name)(DBINFO_SQL_TABLE_NAME)
     related_field = dbInfo_(related_entity_name)(DBINFO_PROPERTIES)(related_prop_name)(DBINFO_FIELD_NAME)
     
-    qry = " left outer join " & related_table & " on " & base_table & ".[" & base_field & "] = " & related_table & ".[" & related_field & "]" & vbCrLf
-    If queryJoins_.Exists(qry) = False Then
-        queryJoin_ = queryJoin_ & qry
-        Call queryJoins_.Add(qry, qry)
-    End If
+    Dim r_table_as As String
+    r_table_as = lastTableAs_ & SQL_TABLE_AS
+    qry = " left outer join " & related_table & " as [" & r_table_as & "] on " _
+        & "[" & lastTableAs_ & "].[" & base_field & "] = [" & r_table_as & "].[" & related_field & "]" & vbCrLf
+            
+    queryJoin_ = queryJoin_ & qry
     
     includedConnectTableString_ = includedConnectTableString_ & property_name
 
-    Call SetQueryField(related_table, dbInfo_(related_entity_name)(DBINFO_PROPERTIES))
+    Call SetQueryField("[" & r_table_as & "]", dbInfo_(related_entity_name)(DBINFO_PROPERTIES))
       
     lastIncludedEntityName_ = related_entity_name
+    lastTableAs_ = r_table_as
+    
+End Function
+
+Public Function SetQuerySelect(property_name As String, Optional entity_name As String)
+    Dim sql_field As String
+    
+    entity_name = IIf(entity_name = "", baseEntityName_, entity_name)
+    queryField_ = dbInfo_(entity_name)(DBINFO_SQL_TABLE_NAME) & "." & dbInfo_(entity_name)(DBINFO_PROPERTIES)(property_name)(DBINFO_FIELD_NAME)
+    Set queryFields_ = New Dictionary
+    Call queryFields_.Add(queryField_)
+
 End Function
 
 Public Function FetchRecords(dbc As Object)
@@ -378,8 +397,8 @@ End Function
 
 
 
+' Private Methods -------------------------------------------------------------------------------------------------
 
-' Private Methods ----------------------------------------------------------------
 ' Scadffolding() -----------------------------------------------------------------
 Private Property Get ProviderHasSchema() As Boolean
     ProviderHasSchema = InStr(cn_.PROVIDER, "SQLOLEDB") > 0
@@ -1377,6 +1396,7 @@ Private Function RollbackTransaction()
         isTransactionActive_ = False
     End If
 End Function
+
 
 ' Add() ----------------------------------------------------------------------------------------------------------
 Private Function AddRelatedEntity(rec As Object)

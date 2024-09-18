@@ -856,8 +856,8 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add "        Call ec_.SetQueryDbSet(entity_name):     Set DbSet = Me"
         .Add "End Function"
         .Add ""
-        .Add "Public Function Where(property_name As String, sql_operator As String, compare_value As String, Optional entity_name As String) As " & dbc_name
-        .Add "        Call ec_.SetQueryWhere(property_name, sql_operator, compare_value, entity_name):      Set Where = Me"
+        .Add "Public Function Where(property_name As String, sql_operator As String, compare_value As String, ParamArray prop_names()) As " & dbc_name
+        .Add "        Call ec_.SetQueryWhere(property_name, sql_operator, compare_value, prop_names):      Set Where = Me"
         .Add "End Function"
         .Add ""
         .Add "Public Function Include(entity_name As String) As " & dbc_name

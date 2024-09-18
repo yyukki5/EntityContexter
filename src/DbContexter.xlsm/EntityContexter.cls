@@ -74,7 +74,8 @@ Private queryWhere_ As String
 Private queryOrder_ As String
 Private lastIncludedEntityName_ As String
 Private includedConnectTableString_ As String
-Private queryFields_ As New Dictionary
+Private queryFields_ As Dictionary
+Private queryFieldsByProperty_ As Dictionary
 Private lastTableAsIndex_ As Long
 
 Private dbInfo_ As Collection
@@ -191,6 +192,7 @@ Public Function SetQueryDbSet(entity_name) As String
     includedConnectTableString_ = baseEntityName_
     
     Set queryFields_ = New Dictionary
+    Set queryFieldsByProperty_ = New Dictionary
     querySelect_ = "select "
     queryField_ = ""
     queryJoin_ = ""
@@ -202,12 +204,20 @@ Public Function SetQueryDbSet(entity_name) As String
     
 End Function
 
-Public Function SetQueryWhere(property_name As String, sql_operator As String, compare_value As String, Optional entity_name As String)
-    entity_name = IIf(entity_name = "", baseEntityName_, entity_name)
+Public Function SetQueryWhere(property_name As String, sql_operator As String, compare_value As String, ByVal prop_names As Variant)
+    Dim prop_path As String, prop_name
+    
+    If IsArray(prop_names) = False Then Call Err.Raise(9001, "EntityContexter.SetQueryWhere()", "need array")
+    
+    prop_path = baseEntityName_
+    For Each prop_name In prop_names
+        prop_path = prop_path & prop_name
+    Next
+        
     If queryWhere_ = "" Then
-        queryWhere_ = " where " & GetDbInfoSqlFieldNameBy(entity_name, property_name) & " " & sql_operator & " " & compare_value
+        queryWhere_ = " where " & queryFieldsByProperty_.Item(prop_path & property_name) & " " & sql_operator & " " & compare_value
     Else
-        queryWhere_ = queryWhere_ & " and " & GetDbInfoSqlFieldNameBy(entity_name, property_name) & " " & sql_operator & " " & compare_value
+        queryWhere_ = queryWhere_ & " and " & queryFieldsByProperty_.Item(prop_path & property_name) & " " & sql_operator & " " & compare_value
     End If
 End Function
 
@@ -1239,6 +1249,7 @@ Private Function SetQueryField(table_name As String, props As Variant)
             If queryFields_.Exists(full_name) = False Then
                 queryField_ = queryField_ & vbCrLf & table_name & ".[" & prop(DBINFO_FIELD_NAME) & "]" & " as " & ConvertDbInfoFullNameToColumnName(full_name) & ", "
                 Call queryFields_.Add(full_name, queryFields_.Count + 1)
+                Call queryFieldsByProperty_.Add(full_name, table_name & ".[" & prop(DBINFO_FIELD_NAME) & "]")
             End If
         End If
     Next

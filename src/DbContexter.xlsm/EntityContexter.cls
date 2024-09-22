@@ -25,6 +25,8 @@ Private Const ENTIINFO_PROPERTIES As String = "Properties"
 Private Const ENTIINFO_PROPERTY_NAME As String = "PropertyName"
 Private Const ENTIINFO_PROPERTY_TYPE As String = "PropertyType"
 Private Const ENTIINFO_PROPERTY_FIELD_NAME As String = "PropertyFieldName"
+Private Const ENTIINFO_BASE_PROPERTY_NAME As String = "DbBaseProperty"
+Private Const ENTIINFO_RELATED_PROPERTY_NAME As String = "DbRelatedProperty"
 Private Const ENTIINFO_DB_TABLE_NAME As String = "DbTableName"
 Private Const ENTIINFO_DB_SQL_TABLE_NAME As String = "SQLTableName"
 Private Const ENTIINFO_DB_FIELD_NAME As String = "DbFieldName"
@@ -126,6 +128,8 @@ Public Function ScaffoldDataBese(Optional usingAttribute As Boolean = True, _
     For Each table_name In tableNames
         Call entityInfos.Add(GetEntityInfoByTableName(table_name), table_name(ENTIINFO_DB_TABLE_NAME))
     Next
+    
+    Call SetEntityRelationship(entityInfos)
                 
     ' create class module from table names
     For Each table_name In tableNames
@@ -469,10 +473,6 @@ Private Function GetEntityInfoByTableName(table_name_info As Collection) As Coll
         
         Call props.Add(prop, prop(ENTIINFO_PROPERTY_NAME))
     Next
-    
-    For Each col In tbl.Columns
-        Call SetPropertyInfoOfRelatedTabel(props, tbl, col)
-    Next
 
     Call entity_info.Add(table_name_info(ENTIINFO_DB_TABLE_NAME), ENTIINFO_DB_TABLE_NAME)
     Call entity_info.Add(table_name_info(ENTIINFO_DB_SQL_TABLE_NAME), ENTIINFO_DB_SQL_TABLE_NAME)
@@ -494,44 +494,69 @@ Private Function GetPropertyInfoByColumn(col As ADOX.Column)
     Call prop.Add(propertyName, ENTIINFO_PROPERTY_NAME)
     Call prop.Add(propertyTypeName, ENTIINFO_PROPERTY_TYPE)
     Call prop.Add(propertyFieldName, ENTIINFO_PROPERTY_FIELD_NAME)
-'    Call prop.Add(False, KEY_ENTITY_IS_PROPERTY_RELATED)
-'    Call prop.Add(col, KEY_DB_ADOX_COLUMN)
     Call prop.Add(col.Name, ENTIINFO_DB_FIELD_NAME)
-'    Call prop.Add(col.Type, ENTIINFO_DB_FIELD_TYPE)
     
     Set GetPropertyInfoByColumn = prop
 End Function
 
-Private Function SetPropertyInfoOfRelatedTabel(props As Collection, base_table As ADOX.Table, base_column As ADOX.Column) As Collection
-    Dim tbl As ADOX.Table, ky As ADOX.Key, col As ADOX.Column, prop As Collection
-    Dim rel, rels
-    
-    Set rels = GetRelations1(base_table.Name)
-    
-    ' todo
-    For Each tbl In catalog_.Tables
-        Set rels = GetRelations(base_table.Name, tbl.Name)
-        For Each rel In rels
-            If rel(KEY_DB_BASE_KEY_TABLE_NAME) = base_table.Name And rel(KEY_DB_BASE_KEY_FIELD_NAME) = base_column.Name Then
-                If rel("IsNto1") Then
-                    Set prop = GetPropertyInfoOfRelatedEntity((rel(KEY_DB_RELATED_TABLE_NAME)))
-                Else
-                    Set prop = GetPropertyInfoOfRelatedEntities((rel(KEY_DB_RELATED_TABLE_NAME)))
-                End If
-                Call props.Add(prop, Key:=prop(ENTIINFO_PROPERTY_NAME))
-            End If
-        Next
-    Next
 
+Private Function SetEntityRelationship(entity_infos As Collection) As Collection
+    Dim rels As Collection, rel, prop As Collection
+    Dim base_ent As Collection, base_props As Collection, base_prop As Collection, rel_table_name As String
+    Dim rel_ent As Collection, rel_prop As Collection
+    
+    ' get relations
+    Set rels = GetRelationsOfDataBase()
+    
+    ' case base:*       , rel:UK          then related is entity
+    ' case base:*       , rel:NOT UK      then related is entities
+    For Each rel In rels
+        Set prop = New Collection
+        
+        Set base_props = entity_infos(rel(1))(ENTIINFO_PROPERTIES)
+        Set base_prop = SelectPropertyByTableNameColumnName(entity_infos, (rel(1)), (rel(3)))
+        Set rel_ent = entity_infos(rel(2))
+        Set rel_prop = SelectPropertyByTableNameColumnName(entity_infos, (rel(2)), (rel(4)))
+        rel_table_name = rel(2)
+        
+        If rel_prop(ENTIINFO_DB_IS_UNIQUE_KEY) Then
+            Set prop = GetPropertyInfoOfRelatedEntity(rel_table_name, base_prop(ENTIINFO_PROPERTY_NAME), rel_prop(ENTIINFO_PROPERTY_NAME))
+        Else
+            Set prop = GetPropertyInfoOfRelatedEntities(rel_table_name, base_prop(ENTIINFO_PROPERTY_NAME), rel_prop(ENTIINFO_PROPERTY_NAME))
+        End If
+        
+        
+        Call base_props.Add(prop, Key:=prop(ENTIINFO_PROPERTY_NAME))
+    Next
+    
+End Function
+
+Private Function GetRelationsOfDataBase() As Collection
+    Dim key_infos As Collection
+            
+    If CanGetAdoxKey Then
+        Set key_infos = GetKeyInfosOfAdox()
+    Else
+        Set key_infos = GetKeyInfosOfTSql()
+    End If
+    
+    Set GetRelationsOfDataBase = key_infos
+End Function
+
+Private Function SelectPropertyByTableNameColumnName(ents As Collection, table_name As String, column_name As String) As Collection
+    Dim prop As Collection
+    For Each prop In ents(table_name)(ENTIINFO_PROPERTIES)
+        If prop(ENTIINFO_DB_FIELD_NAME) = column_name Then Set SelectPropertyByTableNameColumnName = prop
+    Next
 End Function
 
 
-Private Function GetRelations1(base_table_name As String) As Collection
+Private Function GetKeyInfosOfAdox() As Collection
     Dim tbl As ADOX.Table, ky As ADOX.Key, col As ADOX.Column, key_infos As New Collection, key_info As New Collection
-    Call OpenDb
     
-    If CanGetAdoxKey Then
-        For Each ky In catalog_.Tables(base_table_name).Keys
+    Call OpenDb
+    For Each tbl In catalog_.Tables
+        For Each ky In tbl.Keys
             If ky.Type = adKeyForeign Then
                 For Each col In ky.Columns
                     Set key_info = New Collection
@@ -539,132 +564,51 @@ Private Function GetRelations1(base_table_name As String) As Collection
                     Call key_info.Add(ky.RelatedTable, KEY_DB_RELATED_TABLE_NAME)
                     Call key_info.Add(col.Name, KEY_DB_BASE_KEY_FIELD_NAME)
                     Call key_info.Add(col.RelatedColumn, KEY_DB_RELATED_FIELD_NAME)
-                    Call key_info.Add(True, "IsNto1")
                     Call key_infos.Add(key_info, ky.Name)
                 Next
             End If
         Next
-        For Each tbl In catalog_.Tables
-            For Each ky In tbl.Keys
-                If ky.RelatedTable = base_table_name And ky.Type = adKeyForeign Then
-                    For Each col In ky.Columns
-                        Set key_info = New Collection
-                        Call key_info.Add(base_table_name, KEY_DB_BASE_KEY_TABLE_NAME)
-                        Call key_info.Add(tbl.Name, KEY_DB_RELATED_TABLE_NAME)
-                        Call key_info.Add(col.RelatedColumn, KEY_DB_BASE_KEY_FIELD_NAME)
-                        Call key_info.Add(col.Name, KEY_DB_RELATED_FIELD_NAME)
-                        Call key_info.Add(False, "IsNto1")
-                        Call key_infos.Add(key_info, ky.Name)
-                    Next
-                 End If
-            Next
-        Next
-    Else
-        Dim qry As String, db_name As String
-        db_name = "[" & cn_.DefaultDatabase & "]"
-        qry = "SELECT fk.CONSTRAINT_NAME AS ForeignKey, fk.TABLE_NAME AS ChildTable, fk.COLUMN_NAME AS ChildColumn, pk.TABLE_NAME AS ParentTable, pk.COLUMN_NAME AS ParentColumn " & _
-            "FROM " & db_name & ".[INFORMATION_SCHEMA].REFERENTIAL_CONSTRAINTS AS rc " & _
-            "JOIN " & db_name & ".[INFORMATION_SCHEMA].KEY_COLUMN_USAGE AS fk ON rc.CONSTRAINT_NAME = fk.CONSTRAINT_NAME " & _
-            "JOIN " & db_name & ".[INFORMATION_SCHEMA].KEY_COLUMN_USAGE AS pk ON rc.UNIQUE_CONSTRAINT_NAME = pk.CONSTRAINT_NAME Order BY ChildTable, ForeignKey;"
-        
-        Dim rs, i As Long
-        rs = cn_.Execute(qry).GetRows
-        For i = LBound(rs, 2) To UBound(rs, 2)
-            Set key_info = New Collection
-            If rs(1, i) = base_table_name Then
-                Call key_info.Add(rs(1, i), KEY_DB_BASE_KEY_TABLE_NAME)
-                Call key_info.Add(rs(3, i), KEY_DB_RELATED_TABLE_NAME)
-                Call key_info.Add(rs(2, i), KEY_DB_BASE_KEY_FIELD_NAME)
-                Call key_info.Add(rs(4, i), KEY_DB_RELATED_FIELD_NAME)
-                Call key_info.Add(True, "IsNto1")
-                Call key_infos.Add(key_info, rs(0, i))
-            ElseIf rs(3, i) = base_table_name Then
-                Call key_info.Add(rs(3, i), KEY_DB_BASE_KEY_TABLE_NAME)
-                Call key_info.Add(rs(1, i), KEY_DB_RELATED_TABLE_NAME)
-                Call key_info.Add(rs(4, i), KEY_DB_BASE_KEY_FIELD_NAME)
-                Call key_info.Add(rs(2, i), KEY_DB_RELATED_FIELD_NAME)
-                Call key_info.Add(False, "IsNto1")
-                Call key_infos.Add(key_info, rs(0, i))
-            End If
-        Next
-        
-    End If
+    Next
     
-    Set GetRelations1 = key_infos
+    Set GetKeyInfosOfAdox = key_infos
 End Function
 
-Private Function GetRelations(base_table_name As String, related_table_name As String) As Collection
-    Dim tbl As ADOX.Table, ky As ADOX.Key, col As ADOX.Column, key_infos As New Collection, key_info As New Collection
-    Call OpenDb
+Private Function GetKeyInfosOfTSql() As Collection
+    Dim key_infos As New Collection, key_info As New Collection
     
-    If CanGetAdoxKey Then
-        For Each ky In catalog_.Tables(base_table_name).Keys
-            If ky.Type = adKeyForeign And ky.RelatedTable = related_table_name Then
-                For Each col In ky.Columns
-                    Call key_info.Add(base_table_name, KEY_DB_BASE_KEY_TABLE_NAME)
-                    Call key_info.Add(related_table_name, KEY_DB_RELATED_TABLE_NAME)
-                    Call key_info.Add(col.Name, KEY_DB_BASE_KEY_FIELD_NAME)
-                    Call key_info.Add(col.RelatedColumn, KEY_DB_RELATED_FIELD_NAME)
-                    Call key_info.Add(True, "IsNto1")
-                    Call key_infos.Add(key_info, ky.Name)
-                Next
-            End If
-        Next
-        For Each tbl In catalog_.Tables
-            If tbl.Name = related_table_name Then
-                For Each ky In tbl.Keys
-                    If ky.RelatedTable = base_table_name And ky.Type = adKeyForeign Then
-                        For Each col In ky.Columns
-                            Call key_info.Add(base_table_name, KEY_DB_BASE_KEY_TABLE_NAME)
-                            Call key_info.Add(related_table_name, KEY_DB_RELATED_TABLE_NAME)
-                            Call key_info.Add(col.RelatedColumn, KEY_DB_BASE_KEY_FIELD_NAME)
-                            Call key_info.Add(col.Name, KEY_DB_RELATED_FIELD_NAME)
-                            Call key_info.Add(False, "IsNto1")
-                            Call key_infos.Add(key_info, ky.Name)
-                        Next
-                     End If
-                Next
-            End If
-        Next
-    Else
-        Dim qry As String
-        Dim db_name As String
-        db_name = cn_.DefaultDatabase
-        qry = "SELECT fk.CONSTRAINT_NAME AS ForeignKey, fk.TABLE_NAME AS ChildTable, fk.COLUMN_NAME AS ChildColumn, pk.TABLE_NAME AS ParentTable, pk.COLUMN_NAME AS ParentColumn " & _
-            "FROM " & db_name & ".[INFORMATION_SCHEMA].REFERENTIAL_CONSTRAINTS AS rc " & _
-            "JOIN " & db_name & ".[INFORMATION_SCHEMA].KEY_COLUMN_USAGE AS fk ON rc.CONSTRAINT_NAME = fk.CONSTRAINT_NAME " & _
-            "JOIN " & db_name & ".[INFORMATION_SCHEMA].KEY_COLUMN_USAGE AS pk ON rc.UNIQUE_CONSTRAINT_NAME = pk.CONSTRAINT_NAME Order BY ChildTable, ForeignKey;"
-        
-        Dim rs, i As Long
-        rs = cn_.Execute(qry).GetRows
-        For i = LBound(rs, 2) To UBound(rs, 2)
-            If rs(1, i) = base_table_name And rs(3, i) = related_table_name Then
-                Call key_info.Add(rs(1, i), KEY_DB_BASE_KEY_TABLE_NAME)
-                Call key_info.Add(rs(3, i), KEY_DB_RELATED_TABLE_NAME)
-                Call key_info.Add(rs(2, i), KEY_DB_BASE_KEY_FIELD_NAME)
-                Call key_info.Add(rs(4, i), KEY_DB_RELATED_FIELD_NAME)
-                Call key_info.Add(True, "IsNto1")
-                Call key_infos.Add(key_info, rs(0, i))
-            ElseIf rs(1, i) = related_table_name And rs(3, i) = base_table_name Then
-                Call key_info.Add(rs(3, i), KEY_DB_BASE_KEY_TABLE_NAME)
-                Call key_info.Add(rs(1, i), KEY_DB_RELATED_TABLE_NAME)
-                Call key_info.Add(rs(4, i), KEY_DB_BASE_KEY_FIELD_NAME)
-                Call key_info.Add(rs(2, i), KEY_DB_RELATED_FIELD_NAME)
-                Call key_info.Add(False, "IsNto1")
-                Call key_infos.Add(key_info, rs(0, i))
-            End If
-        Next
-        
-    End If
+    Dim qry As String, db_name As String
+    db_name = "[" & cn_.DefaultDatabase & "]"
+    qry = "SELECT fk.CONSTRAINT_NAME AS ForeignKey, fk.TABLE_NAME AS ChildTable, fk.COLUMN_NAME AS ChildColumn, pk.TABLE_NAME AS ParentTable, pk.COLUMN_NAME AS ParentColumn " & _
+        "FROM " & db_name & ".[INFORMATION_SCHEMA].REFERENTIAL_CONSTRAINTS AS rc " & _
+        "JOIN " & db_name & ".[INFORMATION_SCHEMA].KEY_COLUMN_USAGE AS fk ON rc.CONSTRAINT_NAME = fk.CONSTRAINT_NAME " & _
+        "JOIN " & db_name & ".[INFORMATION_SCHEMA].KEY_COLUMN_USAGE AS pk ON rc.UNIQUE_CONSTRAINT_NAME = pk.CONSTRAINT_NAME Order BY ChildTable, ForeignKey;"
     
-    Set GetRelations = key_infos
+    Dim rs, i As Long
+    rs = cn_.Execute(qry).GetRows
+    For i = LBound(rs, 2) To UBound(rs, 2)
+        Set key_info = New Collection
+        Call key_info.Add(rs(1, i), KEY_DB_BASE_KEY_TABLE_NAME)
+        Call key_info.Add(rs(3, i), KEY_DB_RELATED_TABLE_NAME)
+        Call key_info.Add(rs(2, i), KEY_DB_BASE_KEY_FIELD_NAME)
+        Call key_info.Add(rs(4, i), KEY_DB_RELATED_FIELD_NAME)
+        Call key_infos.Add(key_info)
+    
+        Set key_info = New Collection
+        Call key_info.Add(rs(3, i), KEY_DB_BASE_KEY_TABLE_NAME)
+        Call key_info.Add(rs(1, i), KEY_DB_RELATED_TABLE_NAME)
+        Call key_info.Add(rs(4, i), KEY_DB_BASE_KEY_FIELD_NAME)
+        Call key_info.Add(rs(2, i), KEY_DB_RELATED_FIELD_NAME)
+        Call key_infos.Add(key_info)
+    Next
+
+    Set GetKeyInfosOfTSql = key_infos
 End Function
 
-Private Function GetPropertyInfoOfRelatedEntity(table_name As String)
+Private Function GetPropertyInfoOfRelatedEntity(related_table_name As String, base_property_name As String, related_property_name As String)
     Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
 
-    propertyName = ConvertDbTableNameToEntityClassName(table_name)
-    propertyFieldName = ConvertDBFieldNameToClassFieldName(table_name)
+    propertyName = ConvertDbTableNameToEntityClassName(related_table_name)
+    propertyFieldName = ConvertDBFieldNameToClassFieldName(related_table_name)
     propertyTypeName = propertyName
     
     Dim prop As New Collection
@@ -672,22 +616,19 @@ Private Function GetPropertyInfoOfRelatedEntity(table_name As String)
     Call prop.Add(propertyFieldName, ENTIINFO_PROPERTY_FIELD_NAME)
     Call prop.Add(propertyTypeName, ENTIINFO_PROPERTY_TYPE)
     Call prop.Add("", ENTIINFO_DB_FIELD_NAME)
-    
-'    Call prop.Add(True, KEY_ENTITY_IS_PROPERTY_RELATED)
-'    Call prop.Add(base_table_name, KEY_DB_RELATED_TABLE_NAME)
-'    Call prop.Add(base_field_name, KEY_DB_RELATED_FIELD_NAME)
-'    Call prop.Add(table_name, KEY_DB_BASE_KEY_TABLE_NAME)
-'    Call prop.Add(related_field_name, KEY_DB_BASE_KEY_FIELD_NAME)
+        
+    Call prop.Add(base_property_name, ENTIINFO_BASE_PROPERTY_NAME)
+    Call prop.Add(related_property_name, ENTIINFO_RELATED_PROPERTY_NAME)
     
     Call prop.Add(False, ENTIINFO_DB_IS_INDEX)
     Call prop.Add(False, ENTIINFO_DB_IS_PRIMARY_KEY)
-'   Call prop.Add(false, ENTIINFO_DB_IS_UNIQUE_KEY)
+    Call prop.Add(False, ENTIINFO_DB_IS_UNIQUE_KEY)
     Call prop.Add(False, ENTIINFO_DB_IS_AUTOINCREMENT)
     
     Set GetPropertyInfoOfRelatedEntity = prop
 End Function
 
-Private Function GetPropertyInfoOfRelatedEntities(related_table_name As String)
+Private Function GetPropertyInfoOfRelatedEntities(related_table_name As String, base_property_name As String, related_property_name As String)
     Dim propertyName As String, propertyFieldName As String, propertyTypeName As String
 
     propertyName = ConvertDbTableNameToEntitesClassName(related_table_name)
@@ -700,15 +641,12 @@ Private Function GetPropertyInfoOfRelatedEntities(related_table_name As String)
     Call prop.Add(propertyTypeName, ENTIINFO_PROPERTY_TYPE)
     Call prop.Add("", ENTIINFO_DB_FIELD_NAME)
     
-'    Call prop.Add(True, KEY_ENTITY_IS_PROPERTY_RELATED)
-'    Call prop.Add(base_table_name, KEY_DB_RELATED_TABLE_NAME)
-'    Call prop.Add(base_field_name, KEY_DB_RELATED_FIELD_NAME)
-'    Call prop.Add(related_table_name, KEY_DB_BASE_KEY_TABLE_NAME)
-'    Call prop.Add(related_field_name, KEY_DB_BASE_KEY_FIELD_NAME)
-   
+    Call prop.Add(base_property_name, ENTIINFO_BASE_PROPERTY_NAME)
+    Call prop.Add(related_property_name, ENTIINFO_RELATED_PROPERTY_NAME)
+      
     Call prop.Add(False, ENTIINFO_DB_IS_INDEX)
     Call prop.Add(False, ENTIINFO_DB_IS_PRIMARY_KEY)
-'   Call prop.Add(false, ENTIINFO_DB_IS_UNIQUE_KEY)
+    Call prop.Add(False, ENTIINFO_DB_IS_UNIQUE_KEY)
     Call prop.Add(False, ENTIINFO_DB_IS_AUTOINCREMENT)
     
     Set GetPropertyInfoOfRelatedEntities = prop
@@ -727,10 +665,10 @@ Private Function GetIsAutoNumberField(col As ADOX.Column, table_name As String) 
     
 End Function
 
-Private Function CreateDbContext(entity_Infos As Collection, dbcontext_name As String)
+Private Function CreateDbContext(entity_infos As Collection, dbcontext_name As String)
     Dim codeDbcClass As String
     
-    codeDbcClass = GetDbContextCode(entity_Infos, dbcontext_name)
+    codeDbcClass = GetDbContextCode(entity_infos, dbcontext_name)
     If isExportFiles_ Then
         Call AddClassModuleFromFile("DBContext", codeDbcClass)
     Else
@@ -927,7 +865,12 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
                 tmp = tmp & IIf(prop(ENTIINFO_DB_IS_AUTOINCREMENT), ", auto_increment:=" & prop(ENTIINFO_DB_IS_AUTOINCREMENT), "")
                 tmp = tmp & IIf(prop(ENTIINFO_DB_IS_PRIMARY_KEY), ", primary_key:=" & prop(ENTIINFO_DB_IS_PRIMARY_KEY), "")
                 tmp = tmp & IIf(prop(ENTIINFO_DB_IS_UNIQUE_KEY), ", unique_key:=" & prop(ENTIINFO_DB_IS_UNIQUE_KEY), "")
-                ' todo add relatetion
+                
+                
+                tmp = tmp & IIf(prop(ENTIINFO_DB_FIELD_NAME) = "", ", property_type:=""" & prop(ENTIINFO_PROPERTY_TYPE) & """", "")
+                tmp = tmp & IIf(prop(ENTIINFO_DB_FIELD_NAME) = "", ", base_property_name:=""" & prop(ENTIINFO_BASE_PROPERTY_NAME) & """", "")
+                tmp = tmp & IIf(prop(ENTIINFO_DB_FIELD_NAME) = "", ", related_property_name:=""" & prop(ENTIINFO_RELATED_PROPERTY_NAME) & """", "")
+                
                 tmp = tmp & ")"
                 .Add tmp
                 .Add "    Call props.Add(prop, """ & prop(ENTIINFO_PROPERTY_NAME) & """)"

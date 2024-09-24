@@ -31,7 +31,6 @@ Private Const ENTIINFO_RELATED_PROPERTY_NAME As String = "DbRelatedProperty"
 Private Const ENTIINFO_DB_TABLE_NAME As String = "DbTableName"
 Private Const ENTIINFO_DB_SQL_TABLE_NAME As String = "SQLTableName"
 Private Const ENTIINFO_DB_FIELD_NAME As String = "DbFieldName"
-Private Const ENTIINFO_DB_FIELD_TYPE As String = "DbFieldType"
 Private Const ENTIINFO_DB_IS_AUTOINCREMENT As String = "DbIsAutoNumber"
 Private Const ENTIINFO_DB_IS_PRIMARY_KEY As String = "DbIsPrimaryKey"
 Private Const ENTIINFO_DB_IS_UNIQUE_KEY As String = "DbIsUniqueKey"
@@ -49,7 +48,6 @@ Private Const DBINFO_FIELD_TYPE As String = "DbFieldType"
 Private Const DBINFO_IS_AUTONUMBER As String = "DbIsAutoNumber"
 Private Const DBINFO_IS_PRIMARY_KEY As String = "DbIsPrimaryKey"
 Private Const DBINFO_IS_UNIQUE_KEY As String = "DbIsUniqueKey"
-Private Const DBINFO_INDEX As String = "DbIsPrimaryKey"
 Private Const DBINFO_BASE_PROPERTY_NAME As String = "DbBaseProperty"
 Private Const DBINFO_RELATED_PROPERTY_NAME As String = "DbRelatedProperty"
 
@@ -58,9 +56,8 @@ Private Const KEY_DB_RELATED_FIELD_NAME As String = "RelationBaseFieldName"
 Private Const KEY_DB_BASE_KEY_TABLE_NAME As String = "RelationRelatedTableName"
 Private Const KEY_DB_BASE_KEY_FIELD_NAME As String = "RelationRelatedFieldName"
 
-Private Const KEY_DB_AUTOINCREMENT As String = "Autoincrement"
-
 Private Const SQL_TABLE_AS As String = "T"
+
 
 Private cn_ As ADODB.Connection
 Private catalog_ As ADOX.Catalog
@@ -662,7 +659,7 @@ Private Function GetIsAutoNumberField(col As ADOX.Column, table_name As String) 
              "WHERE t.name = '" & table_name & "' " & "AND s.name = '" & schemaName_ & "' " & "AND c.is_identity = 1;"
         GetIsAutoNumberField = Replace(cn_.Execute(qry).GetString(RowDelimeter:=","), ",", "") = col.Name
     Else
-        GetIsAutoNumberField = col.Properties(KEY_DB_AUTOINCREMENT)
+        GetIsAutoNumberField = col.Properties("Autoincrement")
     End If
     
 End Function
@@ -1191,9 +1188,6 @@ Private Function FetchRecsSubRecursive(records_row As Collection, ByVal entity_n
             ' to recul related object
             For Each prop In GetRelatedPropFromDbInfoBy(entity_name)
                 prop_name = prop(DBINFO_PROPERTY_NAME)
-                
-                
-                
                 Set re = FetchRecsSubRecursive(record_rows, prop(DBINFO_RELATED_ENTITY_NAME), prop_path & prop_name, dbc)
                 
                 If re.Count = 0 Then

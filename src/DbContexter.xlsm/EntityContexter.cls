@@ -10,7 +10,7 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' Entity Contexer -----------------------------------------------------------------
-' Version   : 0.5.2
+' Version   : 0.5.3
 ' Project   : https://github.com/yyukki5/EntityContexter
 ' Depend on : Microsoft ActiveX Data Objects X.X Library, Microsoft ADO Ext. 2.8 for DDL and Security, Microsoft Scripting RunTime
 ' Before Using : Need to check "Trust access to the VBA project object model"

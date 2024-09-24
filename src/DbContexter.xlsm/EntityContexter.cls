@@ -10,7 +10,7 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' Entity Contexer -----------------------------------------------------------------
-' Version   : 0.5.2
+' Version   : 0.5.3
 ' Project   : https://github.com/yyukki5/EntityContexter
 ' Depend on : Microsoft ActiveX Data Objects X.X Library, Microsoft ADO Ext. 2.8 for DDL and Security, Microsoft Scripting RunTime
 ' Before Using : Need to check "Trust access to the VBA project object model"
@@ -301,16 +301,6 @@ errNotFoundProperty:
     Call Err.Raise(100001, Err.Source & vbCrLf & "EntityContexter.SetQueryThenInclude(" & property_name & ")", "Not found property in DbInfo of " & lastIncludedEntityName_)
 End Function
 
-Public Function SetQuerySelect(property_name As String, Optional entity_name As String)
-    Dim sql_field As String
-    
-    entity_name = IIf(entity_name = "", baseEntityName_, entity_name)
-    queryField_ = dbInfo_(entity_name)(DBINFO_SQL_TABLE_NAME) & "." & dbInfo_(entity_name)(DBINFO_PROPERTIES)(property_name)(DBINFO_FIELD_NAME)
-    Set queryFields_ = New Dictionary
-    Call queryFields_.Add(queryField_)
-
-End Function
-
 Public Function FetchRecords(dbc As Object)
     Dim rs As Recordset, qry As String, re As Collection, records_rows As Collection
     
@@ -321,7 +311,7 @@ Public Function FetchRecords(dbc As Object)
     If rs.BOF And rs.EOF Then GoTo errFetchQuery
         
     Set records_rows = ConvertRecordRowsToCollection(rs.GetRows)
-    Set re = FetchRecsSubRecursive(records_rows, baseEntityName_, baseEntityName_, dbc, cnt:=0)
+    Set re = FetchRecsSubRecursive(records_rows, baseEntityName_, baseEntityName_, dbc)
     
     Set FetchRecords = re
     Exit Function
@@ -820,8 +810,8 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add "    Call ec_.SetQueryThenBy(property_name, prop_names, false):   Set ThenByDescending = Me"
         .Add "End Function"
         .Add ""
-        .Add "Public Function ToList() As Variant"
-        .Add "    Set ToList = ec_.FetchRecords(Me)"
+        .Add "Public Function ToCollection() As Variant"
+        .Add "    Set ToCollection = ec_.FetchRecords(Me)"
         .Add "End Function"
         .Add ""
         .Add ""
@@ -1162,7 +1152,7 @@ Private Function FetchRecordSetByQuery(query_string As String) As ADODB.Recordse
 End Function
 
 
-Private Function FetchRecsSubRecursive(records_row As Collection, ByVal entity_name As String, ByVal prop_path As String, dbc, Optional cnt As Long) As Object
+Private Function FetchRecsSubRecursive(records_row As Collection, ByVal entity_name As String, ByVal prop_path As String, dbc) As Object
     Dim recs As New Collection, grouped_recs As Collection, record_rows As Collection, record_row, rec As Object, field_name As String, prop_name, v As Variant
     Dim prop As Collection, re As Collection, entities_object As Object
     

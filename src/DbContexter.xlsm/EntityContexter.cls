@@ -209,30 +209,34 @@ Public Function SetQueryDbSet(entity_name) As String
 End Function
 
 Public Function SetQueryWhere(property_name As String, sql_operator As String, compare_value As String, ByVal prop_names As Variant)
-    Dim prop_path As String, prop_name
+    Dim named_field_name As String
     
     If IsArray(prop_names) = False Then Call Err.Raise(9001, "EntityContexter.SetQueryWhere()", "need array")
-    
-    prop_path = baseEntityName_
-    For Each prop_name In prop_names
-        prop_path = prop_path & prop_name
-    Next
-        
+    named_field_name = GetNamedFieldName(property_name, prop_names)
     If queryWhere_ = "" Then
-        queryWhere_ = " where " & queryFieldsByProperty_.Item(prop_path & property_name) & " " & sql_operator & " " & compare_value
+        queryWhere_ = " where " & named_field_name & " " & sql_operator & " " & compare_value
     Else
-        queryWhere_ = queryWhere_ & " and " & queryFieldsByProperty_.Item(prop_path & property_name) & " " & sql_operator & " " & compare_value
+        queryWhere_ = queryWhere_ & " and " & named_field_name & " " & sql_operator & " " & compare_value
     End If
+    
 End Function
 
-Public Function SetQueryOrderBy(property_name As String, Optional entity_name As String, Optional is_asc As Boolean) As String
-    entity_name = IIf(entity_name = "", baseEntityName_, entity_name)
-    queryOrder_ = " order by " & (GetDbInfoSqlFieldNameBy(entity_name, property_name)) & IIf(is_asc, " asc", " desc")
+Public Function SetQueryOrderBy(property_name As String, ByVal prop_names As Variant, Optional is_asc As Boolean) As String
+    Dim named_field_name As String
+    
+    If IsArray(prop_names) = False Then Call Err.Raise(9001, "EntityContexter.SetQueryOrderBy()", "need array")
+    named_field_name = GetNamedFieldName(property_name, prop_names)
+    queryOrder_ = " order by " & named_field_name & IIf(is_asc, " asc", " desc")
+    
 End Function
 
-Public Function SetQueryThenBy(property_name As String, Optional entity_name As String, Optional is_asc As Boolean) As String
-    entity_name = IIf(entity_name = "", baseEntityName_, entity_name)
-    queryOrder_ = queryOrder_ & " , " & (GetDbInfoSqlFieldNameBy(entity_name, property_name)) & IIf(is_asc, " asc", " desc")
+Public Function SetQueryThenBy(property_name As String, ByVal prop_names As Variant, Optional is_asc As Boolean) As String
+    Dim named_field_name As String
+    
+    If IsArray(prop_names) = False Then Call Err.Raise(9001, "EntityContexter.SetQueryThenBy()", "need array")
+    named_field_name = GetNamedFieldName(property_name, prop_names)
+    queryOrder_ = queryOrder_ & " , " & named_field_name & IIf(is_asc, " asc", " desc")
+    
 End Function
 
 Public Function SetQueryInclude(property_name As String) As String
@@ -803,20 +807,20 @@ Private Function GetDbContextCode(infos As Collection, dbc_name As String) As St
         .Add "    Call ec_.SetQueryThenInclude(entity_name):      Set ThenInclude = Me"
         .Add "End Function"
         .Add ""
-        .Add "Public Function OrderBy(property_name As String, Optional entity_name As String) As " & dbc_name
-        .Add "    Call ec_.SetQueryOrderBy(property_name, entity_name, true):   Set OrderBy = Me"
+        .Add "Public Function OrderBy(property_name As String, ParamArray prop_names()) As " & dbc_name
+        .Add "    Call ec_.SetQueryOrderBy(property_name, prop_names, true):   Set OrderBy = Me"
         .Add "End Function"
         .Add ""
-        .Add "Public Function OrderByDescending(property_name As String, Optional entity_name As String) As " & dbc_name
-        .Add "    Call ec_.SetQueryOrderBy(property_name, entity_name, false):   Set OrderByDescending = Me"
+        .Add "Public Function OrderByDescending(property_name As String, ParamArray prop_names()) As " & dbc_name
+        .Add "    Call ec_.SetQueryOrderBy(property_name, prop_names, false):   Set OrderByDescending = Me"
         .Add "End Function"
         .Add ""
-        .Add "Public Function ThenBy(property_name As String, Optional entity_name As String) As " & dbc_name
-        .Add "    Call ec_.SetQueryThenBy(property_name, entity_name, false):   Set ThenBy = Me"
+        .Add "Public Function ThenBy(property_name As String, ParamArray prop_names()) As " & dbc_name
+        .Add "    Call ec_.SetQueryThenBy(property_name, prop_names, false):   Set ThenBy = Me"
         .Add "End Function"
         .Add ""
-        .Add "Public Function ThenByDescending(property_name As String, Optional entity_name As String) As " & dbc_name
-        .Add "    Call ec_.SetQueryThenBy(property_name, entity_name, false):   Set ThenByDescending = Me"
+        .Add "Public Function ThenByDescending(property_name As String, ParamArray prop_names()) As " & dbc_name
+        .Add "    Call ec_.SetQueryThenBy(property_name, prop_names, false):   Set ThenByDescending = Me"
         .Add "End Function"
         .Add ""
         .Add "Public Function ToList() As Variant"
@@ -1138,6 +1142,17 @@ End Function
 
 Private Function ConvertDbInfoFullNameToColumnName(full_field_name As String) As String
     ConvertDbInfoFullNameToColumnName = Replace(Replace(Replace(full_field_name, ".", ""), "[", ""), "]", "")
+End Function
+
+Private Function GetNamedFieldName(property_name As String, ByVal prop_names As Variant)
+    Dim prop_path As String, prop_name
+     
+    prop_path = baseEntityName_
+    For Each prop_name In prop_names
+        prop_path = prop_path & prop_name
+    Next
+    
+    GetNamedFieldName = queryFieldsByProperty_.Item(prop_path & property_name)
 End Function
 
 

@@ -1227,7 +1227,11 @@ Private Function HasSameRecord(r, col As Collection, entity_name As String, prop
         For Each prop_name In GetPropertyNamesFromDbInfoBy(entity_name)
             field_name = prop_path & prop_name
             c = queryFields_(field_name)
+            If IsArray(r) = False Then
             If r(c) <> r1(c) Then f = False
+            Else
+                If UBound(r(c)) <> UBound(r1(c)) Then f = False
+            End If
         Next
         If f Then HasSameRecord = True: Exit Function
     Next
